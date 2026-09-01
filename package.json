@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start -p 9910",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-transform-types --no-warnings --import ./scripts/muzzik-test-loader.mjs --test \"scripts/*.test.ts\""
   },
   "dependencies": {
     "clsx": "^2.1.1",
