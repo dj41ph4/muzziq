@@ -1,0 +1,29 @@
+services:
+  muzzik:
+    container_name: muzzik
+    build:
+      context: ../..
+      dockerfile: packaging/docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "9910:9910" # interface web + API
+      # Port peer BitTorrent — forwarder aussi sur le routeur/pare-feu.
+      - "51413:51413/tcp"
+      - "51413:51413/udp"
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "Europe/Paris"
+    volumes:
+      # Config applicative, stores JSON, Context Engine SQLite, torrents en cours.
+      - ./config:/config
+      # Bibliothèque musicale finale — pointe vers le dossier que Plex (si
+      # utilisé) surveille déjà, pour que les nouveaux morceaux apparaissent
+      # automatiquement des deux côtés.
+      - /volume1/music:/music
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9910/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

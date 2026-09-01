@@ -1,0 +1,4 @@
+# Un script shell avec des fins de ligne CRLF casse au démarrage dans un
+# conteneur Linux ("/bin/sh^M: bad interpreter") — forcé en LF quelle que
+# soit la config git locale (Windows autoconvertit sinon).
+*.sh text eol=lf
