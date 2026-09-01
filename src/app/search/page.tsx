@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import useSWR from "swr";
 import type { ExternalTrack } from "@/lib/contracts/music";
 
@@ -28,11 +28,31 @@ export default function SearchPage() {
   const [playing, setPlaying] = useState<EnrichedTrack | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
+
+  function externalPayload(t: EnrichedTrack) {
+    return {
+      provider: "youtube-music",
+      providerTrackId: t.providerTrackId,
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      durationSeconds: t.durationSeconds,
+      thumbnailUrl: t.thumbnailUrl,
+    };
+  }
 
   async function play(track: EnrichedTrack) {
     setPlaying(track);
     setStreamUrl(null);
     setStreamError(null);
+
+    fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...externalPayload(track), type: "PLAY_START", source: track.localMatch ? "LOCAL" : "PROVIDER" }),
+    });
+
     if (track.localMatch) return;
 
     const res = await fetch(`/api/play/${track.providerTrackId}`);
@@ -42,6 +62,16 @@ export default function SearchPage() {
     } else {
       setStreamUrl(body.url);
     }
+  }
+
+  async function addToLibrary(e: MouseEvent, track: EnrichedTrack) {
+    e.stopPropagation();
+    await fetch("/api/library/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(externalPayload(track)),
+    });
+    setAddedIds((prev) => new Set(prev).add(track.providerTrackId));
   }
 
   return (
@@ -119,6 +149,14 @@ export default function SearchPage() {
               </span>
             )}
             <span className="text-xs text-[var(--ink-dim)]">{formatDuration(t.durationSeconds)}</span>
+            <button
+              onClick={(e) => addToLibrary(e, t)}
+              disabled={addedIds.has(t.providerTrackId)}
+              title="Ajouter à la bibliothèque"
+              className="rounded-full border border-white/15 px-2 py-1 text-xs font-bold text-[var(--ink-soft)] hover:border-[var(--brand)]/50 hover:text-[var(--brand)] disabled:opacity-40"
+            >
+              {addedIds.has(t.providerTrackId) ? "✓" : "+"}
+            </button>
           </li>
         ))}
       </ul>
