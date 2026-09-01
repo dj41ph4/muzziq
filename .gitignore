@@ -30,7 +30,7 @@ Thumbs.db
 
 # AI assistant local config — never committed, no AI trace in this repo (règle absolue)
 .claude/
-/les règles opérationnelles du projet
+/CLAUDE.md
 .cursor/
 .windsurf/
 .cline/
