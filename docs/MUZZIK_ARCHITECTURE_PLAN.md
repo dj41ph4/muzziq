@@ -2024,6 +2024,82 @@ FileProvider + Intent ACTION_VIEW (PackageInstaller) → écran d'installation A
   Movviz Android (`android-mobile/`) si elle existe au moment de la Phase I — réutiliser
   plutôt que réécrire (§87.4) si un mécanisme équivalent y est déjà mature.
 
+## 56.4 Mode Standalone vs mode Lié — premier lancement
+
+Au premier lancement, l'app propose un choix explicite (jamais un compte forcé) :
+
+```text
+┌─────────────────────────────────┐
+│  Se connecter à un serveur      │  → saisie URL, test /api/health,
+│                                  │    login si le serveur en a un
+├─────────────────────────────────┤
+│  Utiliser en local (standalone) │  → aucun login, tout sur l'appareil
+└─────────────────────────────────┘
+```
+
+### Mode Lié
+
+Comportement déjà décrit dans tout le document — le serveur reste maître du
+catalogue, de l'identité, des recommandations, de l'acquisition (§56).
+
+### Mode Standalone — ce qui marche, ce qui ne marche pas
+
+Le client embarque ses propres équivalents allégés des briques serveur :
+
+- **Bibliothèque locale** : scan du stockage de l'appareil (API `MediaStore`
+  Android — standard, pas de réinvention) au lieu du scanner serveur (§34).
+- **Moteur de préférences on-device** : mini Context Engine local (SQLite
+  embarqué sur l'appareil, même logique d'affinité incrémentale que §45/
+  Context Engine serveur — porté, pas réinventé) au lieu du ledger serveur.
+- **Lecture locale** : Media3/ExoPlayer joue directement les fichiers de
+  l'appareil, aucune dépendance réseau.
+- **Téléchargement** : gère son propre offline (§57 DeviceOfflineItem)
+  sans jamais passer par un serveur.
+- **Pas de login/mot de passe** : un seul utilisateur, un seul appareil,
+  aucune notion de compte à gérer en standalone.
+
+**Limite honnête à ne jamais cacher dans l'UI** : la recherche/lecture
+YouTube Music reste soumise au même blocage PoToken que le serveur (voir
+`docs/reverse-engineering/youtube-music/`) — mais sans le repli yt-dlp
+possible, puisque yt-dlp est un outil Python non déployable sur Android.
+En standalone, MUZZIK est donc essentiellement **un lecteur de bibliothèque
+locale avec moteur de goût**, pas un client de streaming complet. L'UI doit
+le dire clairement plutôt que de laisser l'utilisateur découvrir un bouton
+Play qui ne fonctionne jamais.
+
+### Migration Standalone → Lié : ne jamais perdre les données locales
+
+Si l'utilisateur connecte plus tard son appareil standalone à un serveur,
+une synchronisation montante (device → serveur) doit tourner **une fois**,
+avant que le serveur ne devienne la source de vérité :
+
+```text
+Connexion à un serveur (après une période standalone)
+      ↓
+Comparaison : LibraryItems locaux vs bibliothèque serveur
+      ↓
+IdentityResolver (§7) réconcilie chaque item local avec le catalogue serveur
+      ↓
+Upload : historique d'écoute local → ledger Context Engine serveur (§45)
+Upload : affinités locales → fusionnées avec les affinités serveur (jamais écrasées à l'aveugle — même logique de confiance/evidence_count que §45)
+Upload : LibraryItems locaux sans équivalent serveur → créés côté serveur
+      ↓
+Rapport de synchronisation visible (X morceaux réconciliés, Y ajoutés, Z conflits) — jamais silencieux
+      ↓
+Le serveur devient la source de vérité ; l'appareil repasse en mode Lié normal
+```
+
+Règles :
+
+- Cette synchronisation est **un événement ponctuel**, pas un mode
+  bidirectionnel permanent — une fois liée, l'app suit le comportement
+  normal du mode Lié (§56).
+- Jamais de fusion aveugle d'affinités (même INTERDIT 11 que l'IdentityResolver
+  — un conflit visible vaut mieux qu'une préférence corrompue silencieusement).
+- Les fichiers audio déjà téléchargés sur l'appareil ne sont jamais
+  supprimés par cette synchronisation — seule la métadonnée (bibliothèque,
+  historique, goût) migre.
+
 ---
 
 # 57. Offline mobile
