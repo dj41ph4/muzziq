@@ -17,12 +17,20 @@ interface HomeRow {
   recordings: Recording[];
 }
 
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 5) return "Bonne nuit";
+  if (hour < 12) return "Bonjour";
+  if (hour < 18) return "Bon après-midi";
+  return "Bonsoir";
+}
+
 export default function HomePage() {
   const { data } = useSWR<{ rows: HomeRow[] }>("/api/home", fetcher);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-10">
-      <h1 className="text-2xl font-bold">Accueil</h1>
+      <h1 className="text-2xl font-bold">{greeting()}</h1>
 
       {data?.rows.length === 0 && (
         <p className="text-[var(--ink-dim)]">

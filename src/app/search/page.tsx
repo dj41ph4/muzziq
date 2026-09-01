@@ -3,6 +3,7 @@
 import { useState, type MouseEvent } from "react";
 import useSWR from "swr";
 import type { ExternalTrack } from "@/lib/contracts/music";
+import { usePlayer, type PlayableTrack } from "@/components/PlayerContext";
 
 type EnrichedTrack = ExternalTrack & { localMatch?: { fileId: string; confidence: number } };
 
@@ -18,6 +19,7 @@ function formatDuration(seconds?: number): string {
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
+  const { play, track: nowPlaying } = usePlayer();
 
   const { data, isLoading } = useSWR<{ tracks: EnrichedTrack[]; error?: string }>(
     submitted ? `/api/search?q=${encodeURIComponent(submitted)}` : null,
@@ -25,9 +27,6 @@ export default function SearchPage() {
   );
 
   const { data: health } = useSWR("/api/providers/youtube-music/health", fetcher, { refreshInterval: 30000 });
-  const [playing, setPlaying] = useState<EnrichedTrack | null>(null);
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
-  const [streamError, setStreamError] = useState<string | null>(null);
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
   function externalPayload(t: EnrichedTrack) {
@@ -42,26 +41,11 @@ export default function SearchPage() {
     };
   }
 
-  async function play(track: EnrichedTrack) {
-    setPlaying(track);
-    setStreamUrl(null);
-    setStreamError(null);
-
-    fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...externalPayload(track), type: "PLAY_START", source: track.localMatch ? "LOCAL" : "PROVIDER" }),
-    });
-
-    if (track.localMatch) return;
-
-    const res = await fetch(`/api/play/${track.providerTrackId}`);
-    const body = await res.json();
-    if (!res.ok) {
-      setStreamError(`${body.error} (${body.status})`);
-    } else {
-      setStreamUrl(body.url);
-    }
+  function playTrack(t: EnrichedTrack) {
+    const playable: PlayableTrack = t.localMatch
+      ? { kind: "local", id: t.localMatch.fileId, title: t.title, artist: t.artist, album: t.album, thumbnailUrl: t.thumbnailUrl, durationSeconds: t.durationSeconds }
+      : { kind: "provider", id: t.providerTrackId, title: t.title, artist: t.artist, album: t.album, thumbnailUrl: t.thumbnailUrl, durationSeconds: t.durationSeconds };
+    play(playable);
   }
 
   async function addToLibrary(e: MouseEvent, track: EnrichedTrack) {
@@ -106,59 +90,45 @@ export default function SearchPage() {
       {isLoading && <p className="text-[var(--ink-dim)]">Recherche en cours…</p>}
       {data?.error && <p className="text-red-400">{data.error}</p>}
 
-      {playing && (
-        <div className="rounded-xl border border-[var(--brand)]/40 bg-[var(--panel)] p-3">
-          <div className="mb-2 text-sm font-semibold">
-            {playing.title} — {playing.artist} <span className="text-[var(--brand)]">{playing.localMatch ? "· Local" : "· Streaming"}</span>
-          </div>
-          {playing.localMatch ? (
-            // eslint-disable-next-line jsx-a11y/media-has-caption
-            <audio controls autoPlay src={`/api/stream/${playing.localMatch.fileId}`} className="w-full" />
-          ) : streamUrl ? (
-            // eslint-disable-next-line jsx-a11y/media-has-caption
-            <audio controls autoPlay src={streamUrl} className="w-full" />
-          ) : streamError ? (
-            <p className="text-sm text-red-400">{streamError}</p>
-          ) : (
-            <p className="text-sm text-[var(--ink-dim)]">Résolution du flux…</p>
-          )}
-        </div>
-      )}
-
       <ul className="flex flex-col gap-2">
-        {data?.tracks?.map((t) => (
-          <li
-            key={t.providerTrackId}
-            onClick={() => play(t)}
-            className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-[var(--panel)] p-3 hover:border-[var(--brand)]/50"
-          >
-            {t.thumbnailUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={t.thumbnailUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="truncate font-semibold">{t.title}</div>
-              <div className="truncate text-sm text-[var(--ink-soft)]">
-                {t.artist}
-                {t.album ? ` • ${t.album}` : ""}
-              </div>
-            </div>
-            {t.localMatch && (
-              <span className="rounded-full border border-[var(--brand)]/30 bg-[var(--brand)]/12 px-2 py-0.5 text-[10px] font-bold text-[var(--brand)]">
-                Local
-              </span>
-            )}
-            <span className="text-xs text-[var(--ink-dim)]">{formatDuration(t.durationSeconds)}</span>
-            <button
-              onClick={(e) => addToLibrary(e, t)}
-              disabled={addedIds.has(t.providerTrackId)}
-              title="Ajouter à la bibliothèque"
-              className="rounded-full border border-white/15 px-2 py-1 text-xs font-bold text-[var(--ink-soft)] hover:border-[var(--brand)]/50 hover:text-[var(--brand)] disabled:opacity-40"
+        {data?.tracks?.map((t) => {
+          const isCurrent = nowPlaying?.id === (t.localMatch?.fileId ?? t.providerTrackId);
+          return (
+            <li
+              key={t.providerTrackId}
+              onClick={() => playTrack(t)}
+              className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 hover:border-[var(--brand)]/50 ${
+                isCurrent ? "border-[var(--brand)]/60 bg-[var(--brand)]/5" : "border-white/10 bg-[var(--panel)]"
+              }`}
             >
-              {addedIds.has(t.providerTrackId) ? "✓" : "+"}
-            </button>
-          </li>
-        ))}
+              {t.thumbnailUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={t.thumbnailUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-semibold">{t.title}</div>
+                <div className="truncate text-sm text-[var(--ink-soft)]">
+                  {t.artist}
+                  {t.album ? ` • ${t.album}` : ""}
+                </div>
+              </div>
+              {t.localMatch && (
+                <span className="rounded-full border border-[var(--brand)]/30 bg-[var(--brand)]/12 px-2 py-0.5 text-[10px] font-bold text-[var(--brand)]">
+                  Local
+                </span>
+              )}
+              <span className="text-xs text-[var(--ink-dim)]">{formatDuration(t.durationSeconds)}</span>
+              <button
+                onClick={(e) => addToLibrary(e, t)}
+                disabled={addedIds.has(t.providerTrackId)}
+                title="Ajouter à la bibliothèque"
+                className="rounded-full border border-white/15 px-2 py-1 text-xs font-bold text-[var(--ink-soft)] hover:border-[var(--brand)]/50 hover:text-[var(--brand)] disabled:opacity-40"
+              >
+                {addedIds.has(t.providerTrackId) ? "✓" : "+"}
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </main>
   );

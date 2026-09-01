@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import { useState } from "react";
 import type { MediaFile } from "@/lib/library/mediaFilesStore";
+import { usePlayer } from "@/components/PlayerContext";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -28,7 +29,7 @@ export default function LibraryPage() {
 
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
-  const [nowPlaying, setNowPlaying] = useState<MediaFile | null>(null);
+  const { play, track: nowPlaying } = usePlayer();
 
   async function runScan() {
     setScanning(true);
@@ -50,21 +51,7 @@ export default function LibraryPage() {
   }
 
   function playLocal(f: MediaFile) {
-    setNowPlaying(f);
-    fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        provider: "local",
-        providerTrackId: f.id,
-        title: f.title,
-        artist: f.artist,
-        album: f.album,
-        durationSeconds: f.durationSeconds,
-        type: "PLAY_START",
-        source: "LOCAL",
-      }),
-    });
+    play({ kind: "local", id: f.id, title: f.title, artist: f.artist, album: f.album, durationSeconds: f.durationSeconds });
   }
 
   async function removeItem(id: string) {
@@ -87,16 +74,6 @@ export default function LibraryPage() {
 
       {scanResult && <p className="text-sm text-[var(--ink-soft)]">{scanResult}</p>}
 
-      {nowPlaying && (
-        <div className="rounded-xl border border-white/10 bg-[var(--panel)] p-3">
-          <div className="mb-2 text-sm font-semibold">
-            {nowPlaying.title} — {nowPlaying.artist}
-          </div>
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <audio controls autoPlay src={`/api/stream/${nowPlaying.id}`} className="w-full" />
-        </div>
-      )}
-
       <section>
         <h2 className="mb-2 text-sm font-bold uppercase text-[var(--ink-dim)]">Fichiers locaux ({data?.files?.length ?? 0})</h2>
         <ul className="flex flex-col gap-2">
@@ -104,7 +81,9 @@ export default function LibraryPage() {
             <li
               key={f.id}
               onClick={() => playLocal(f)}
-              className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-[var(--panel)] p-3 hover:border-[var(--brand)]/50"
+              className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 hover:border-[var(--brand)]/50 ${
+                nowPlaying?.kind === "local" && nowPlaying.id === f.id ? "border-[var(--brand)]/60 bg-[var(--brand)]/5" : "border-white/10 bg-[var(--panel)]"
+              }`}
             >
               <div className="min-w-0 flex-1">
                 <div className="truncate font-semibold">{f.title}</div>
