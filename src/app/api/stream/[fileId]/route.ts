@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * Lecture locale (plan §82) : local FLAC trouvé → endpoint media MUZZIK →
  * HTTP range → client player. Pas de Plex.
  *
- * Sécurité (plan §58, les règles opérationnelles du projet règle 6) : le chemin servi vient UNIQUEMENT
+ * Sécurité (plan §58) : le chemin servi vient UNIQUEMENT
  * du store (écrit par le scanner), jamais d'un chemin reconstruit depuis
  * l'entrée client — `fileId` ne référence rien d'autre qu'une clé opaque.
  */

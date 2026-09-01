@@ -3343,7 +3343,7 @@ fusion incorrecte pollue durablement l'historique d'écoute et les recommandatio
 
 # 105. Leçons apprises de Movviz — à ne pas reproduire
 
-Constats tirés du code et de l'historique réels de Movviz (`les règles opérationnelles du projet`, `AGENTS.md`,
+Constats tirés du code et de l'historique réels de Movviz (documentation interne,
 `CHANGELOG.md`, `TODO_POST_MOTEUR_LECTURE.md`). Chaque point a coûté un bug en
 production ou un incident réel — MUZZIK part avec ces règles dès le premier commit au
 lieu de les redécouvrir.
