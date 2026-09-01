@@ -28,5 +28,13 @@ Thumbs.db
 # typescript
 *.tsbuildinfo
 
-# AI assistant local config — not part of the shipped product
+# AI assistant local config — never committed, no AI trace in this repo (règle absolue)
 .claude/
+/les règles opérationnelles du projet
+.cursor/
+.windsurf/
+.cline/
+.aider*
+AGENTS.md
+.opencode/
+
