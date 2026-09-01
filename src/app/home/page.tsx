@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import { Music2 } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { usePlayer } from "@/components/PlayerContext";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -58,6 +59,14 @@ function RowSkeleton() {
 
 export default function HomePage() {
   const { data } = useSWR<{ rows: HomeRow[] }>("/api/home", fetcher);
+  const { play } = usePlayer();
+
+  async function playRecording(r: Recording) {
+    const res = await fetch(`/api/recordings/${r.id}/resolve`);
+    if (!res.ok) return; // Aucune source réelle trouvée — jamais fabriquer une lecture qui échouera.
+    const resolved: { kind: "local" | "provider"; id: string } = await res.json();
+    play({ kind: resolved.kind, id: resolved.id, title: r.title, artist: r.artist, thumbnailUrl: r.thumbnailUrl });
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-10 px-5 pt-8 sm:px-8">
@@ -85,7 +94,7 @@ export default function HomePage() {
           <h2 className="mb-4 text-xl font-bold tracking-tight">{row.title}</h2>
           <div className="-mx-5 flex gap-4 overflow-x-auto px-5 pb-2 sm:-mx-8 sm:px-8" style={{ scrollbarWidth: "none" }}>
             {row.recordings.map((r) => (
-              <div key={r.id} className="group w-36 flex-shrink-0 cursor-default">
+              <div key={r.id} onClick={() => playRecording(r)} className="group w-36 flex-shrink-0 cursor-pointer">
                 <Cover url={r.thumbnailUrl} />
                 <div className="mt-2 truncate text-[13px] font-semibold tracking-tight">{r.title}</div>
                 <div className="truncate text-[12px] text-[var(--ink-soft)]">{r.artist}</div>
