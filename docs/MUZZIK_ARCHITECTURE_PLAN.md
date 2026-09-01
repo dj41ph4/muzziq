@@ -1920,7 +1920,8 @@ downloads offline autorisés
 notification media
 headset controls
 Bluetooth
-Android Auto plus tard
+Android Auto
+mise à jour automatique de l'application
 ```
 
 Le serveur reste maître de :
@@ -1931,6 +1932,97 @@ Le serveur reste maître de :
 - sources ;
 - bibliothèque ;
 - acquisition.
+
+## 56.1 Langage visuel — inspiré de Spotify, jamais copié
+
+Objectif explicite du produit : un effet "wow", une app qui donne l'impression d'un
+produit fini et premium dès la V1, pas un client fonctionnel mais austère. Spotify sert
+de référence de langage visuel au même titre que Plexamp sert de référence
+d'expérience musicale (§1.4) — observation du langage d'interface publiquement visible
+dans l'app, jamais de code, d'assets ou de ressources Spotify copiés.
+
+Éléments du langage Spotify à reproduire (dans l'esprit, pas au pixel) :
+
+- **Hero header dynamique par écran** : en haut d'une fiche album/artiste/playlist, la
+  pochette occupe toute la largeur, avec un dégradé de couleur extrait de l'image
+  dominante qui infuse progressivement le fond de l'écran vers le noir en descendant
+  (palette dynamique — `Palette` API Android ou équivalent Compose, calculée une fois
+  par pochette et mise en cache). Aucun écran ne doit avoir un fond plat identique à
+  tous les autres.
+- **Mini-player persistant en bas** : barre fine avec pochette miniature, titre/artiste
+  qui défile si trop long, play/pause, toujours visible pendant la navigation. Tap =
+  ouverture du plein écran avec une transition d'élément partagé (shared element) sur
+  la pochette — jamais un simple modal qui apparaît d'un coup.
+- **Plein écran lecteur** : pochette large et centrée, contrôles secondaires (paroles,
+  file d'attente, appareils) accessibles par swipe horizontal ou onglets en haut du
+  lecteur plutôt que des boutons empilés. Barre de progression fine, waveform ou
+  simple ligne selon la densité d'info voulue.
+- **Grilles et rangées horizontales scrollables** pour le Home/Discover (§46) — jamais
+  une simple liste verticale uniforme comme seul mode de navigation.
+- **Swipe pour retirer** un morceau de la file d'attente, swipe pour liker (bord
+  gauche/droit configurable).
+- **Thème sombre par défaut**, jamais de flash blanc au démarrage (splash screen avec
+  fond déjà sombre, cohérent avec le thème final — API Splash Screen Android 12+).
+- **Micro-animations** : le bouton play qui morph en pause, l'icône like qui pulse au
+  tap, la pochette qui reprend une légère rotation/échelle pendant la lecture active —
+  discret, jamais distrayant, mais présent partout où Spotify en met.
+
+Techniquement : Jetpack Compose (déjà dans la stack §4) + Material 3 avec un thème
+entièrement custom (jamais le Material par défaut visible tel quel), `Palette` pour
+l'extraction de couleur dominante, `AnimatedContent`/`SharedTransitionLayout` de
+Compose pour les transitions.
+
+## 56.2 Android Auto
+
+Intégration native via `MediaLibraryService` (Media3), pas une réimplémentation
+maison — c'est exactement le rôle prévu de la stack Media3 déjà choisie (§4).
+
+- Arborescence exposée à Android Auto : Continuer l'écoute, Bibliothèque, Playlists,
+  Artistes suivis, Radios, Récemment ajoutés — même structure logique que le Home
+  mobile (§46), pas une hiérarchie différente à maintenir en parallèle.
+- Recherche vocale ("Joue [artiste/titre] sur MUZZIK") routée vers l'API de recherche
+  unifiée du serveur (§47), résolue par le Playback Resolver (§12) exactement comme
+  une recherche manuelle — aucune logique de lecture dupliquée pour Android Auto.
+- UI simplifiée et conforme aux contraintes de sécurité Android Auto (grosses cibles
+  tactiles, pas de texte dense, pas d'interaction complexe pendant la conduite) —
+  gérée automatiquement par le template `MediaLibraryService`, pas de vue custom à
+  construire à la main.
+- Le mini-player/notification média (déjà nécessaire pour le téléphone) alimente
+  directement Android Auto via la même `MediaSession` — pas un second pipeline de
+  lecture à synchroniser.
+
+## 56.3 Mise à jour automatique de l'application
+
+Même philosophie que la mise à jour automatique du serveur Movviz
+(`src/lib/settings/autoUpdate.ts` côté serveur — vérification périodique d'une version
+distante, activable/désactivable) transposée à l'app Android, puisque MUZZIK n'est pas
+distribué sur le Play Store (auto-hébergé, comme Movviz) :
+
+```text
+App Android
+  ↓ périodique (ou au lancement)
+GET /api/updates/android → { latestVersionCode, apkUrl, changelog }
+  ↓ si latestVersionCode > version installée
+Bannière "Mise à jour disponible" (jamais un blocage forcé)
+  ↓ utilisateur accepte
+Téléchargement APK en arrière-plan (barre de progression)
+  ↓ téléchargement terminé
+FileProvider + Intent ACTION_VIEW (PackageInstaller) → écran d'installation Android
+```
+
+- Le serveur MUZZIK sert l'APK (endpoint `/api/updates/android/latest.apk`) — pas de
+  dépendance à un store tiers, cohérent avec le principe d'autonomie du plan (§2).
+- Vérification de signature APK par le système Android lui-même (le mécanisme standard
+  d'installation) — MUZZIK n'a pas à réimplémenter de vérification cryptographique.
+  Toujours signer l'APK avec la même clé entre versions, sinon l'installation
+  systeme refuse la mise à jour (écrase au lieu de mettre à jour).
+- Jamais de mise à jour forcée/silencieuse sans confirmation utilisateur (Android ne
+  permet de toute façon pas l'installation silencieuse sans permission `REQUEST_INSTALL_PACKAGES`
+  explicitement accordée) — cohérent avec le principe "explicit permission required"
+  déjà appliqué ailleurs dans l'écosystème de l'auteur.
+- Avant de construire ce flux, vérifier l'implémentation réelle déjà en place côté
+  Movviz Android (`android-mobile/`) si elle existe au moment de la Phase I — réutiliser
+  plutôt que réécrire (§87.4) si un mécanisme équivalent y est déjà mature.
 
 ---
 
