@@ -2,8 +2,10 @@
 
 import { useState, type MouseEvent } from "react";
 import useSWR from "swr";
+import { Search as SearchIcon, Plus, Check, Music2, Play } from "lucide-react";
 import type { ExternalTrack } from "@/lib/contracts/music";
 import { usePlayer, type PlayableTrack } from "@/components/PlayerContext";
+import { TopBar } from "@/components/TopBar";
 
 type EnrichedTrack = ExternalTrack & { localMatch?: { fileId: string; confidence: number } };
 
@@ -12,14 +14,20 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 function formatDuration(seconds?: number): string {
   if (!seconds) return "";
   const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
+  const s = Math.floor(seconds % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function statusColor(status?: string): string {
+  if (status === "OK") return "text-[var(--brand)]";
+  if (status === "DEGRADED" || status === "AUTH_REQUIRED" || status === "RATE_LIMITED") return "text-amber-400";
+  return "text-red-400";
 }
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
-  const { play, track: nowPlaying } = usePlayer();
+  const { play, track: nowPlaying, isPlaying } = usePlayer();
 
   const { data, isLoading } = useSWR<{ tracks: EnrichedTrack[]; error?: string }>(
     submitted ? `/api/search?q=${encodeURIComponent(submitted)}` : null,
@@ -59,12 +67,13 @@ export default function SearchPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-10">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-5 pt-8 sm:px-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Recherche</h1>
+        <TopBar title="Recherche" />
         {health && (
-          <span className="rounded-full border border-white/15 bg-[var(--panel)] px-2.5 py-0.5 text-[10px] font-bold text-[var(--ink-soft)]">
-            YT Music — recherche {health.probes?.search?.status} · lecture {health.probes?.player?.status}
+          <span className="glass flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold text-[var(--ink-soft)]">
+            <span className={`h-1.5 w-1.5 rounded-full ${statusColor(health.probes?.player?.status)} bg-current`} />
+            YT Music
           </span>
         )}
       </div>
@@ -74,57 +83,88 @@ export default function SearchPage() {
           e.preventDefault();
           setSubmitted(query.trim());
         }}
-        className="flex gap-2"
+        className="float-in relative"
       >
+        <SearchIcon size={18} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[var(--ink-dim)]" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Artiste, titre, album…"
-          className="flex-1 rounded-xl border border-white/10 bg-[var(--panel)] px-4 py-2 outline-none focus:border-[var(--brand)]"
+          className="glass w-full rounded-full py-3.5 pl-11 pr-16 text-[15px] outline-none placeholder:text-[var(--ink-dim)] focus:border-[var(--brand)]/50"
         />
-        <button type="submit" className="rounded-xl bg-[var(--brand)] px-4 py-2 font-bold text-black">
-          Chercher
+        <button
+          type="submit"
+          disabled={!query.trim()}
+          className="brand-gradient absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full px-4 py-2 text-[13px] font-bold text-black transition-transform active:scale-95 disabled:opacity-0"
+        >
+          OK
         </button>
       </form>
 
-      {isLoading && <p className="text-[var(--ink-dim)]">Recherche en cours…</p>}
-      {data?.error && <p className="text-red-400">{data.error}</p>}
+      {isLoading && (
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex animate-pulse items-center gap-3 rounded-xl p-3">
+              <div className="h-12 w-12 rounded-lg bg-white/[0.06]" />
+              <div className="flex-1">
+                <div className="h-3 w-2/5 rounded bg-white/[0.06]" />
+                <div className="mt-1.5 h-2.5 w-1/3 rounded bg-white/[0.04]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {data?.error && <p className="text-sm text-red-400">{data.error}</p>}
 
-      <ul className="flex flex-col gap-2">
-        {data?.tracks?.map((t) => {
+      <ul className="flex flex-col gap-1">
+        {data?.tracks?.map((t, i) => {
           const isCurrent = nowPlaying?.id === (t.localMatch?.fileId ?? t.providerTrackId);
           return (
             <li
               key={t.providerTrackId}
               onClick={() => playTrack(t)}
-              className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 hover:border-[var(--brand)]/50 ${
-                isCurrent ? "border-[var(--brand)]/60 bg-[var(--brand)]/5" : "border-white/10 bg-[var(--panel)]"
-              }`}
+              className="float-in group flex cursor-pointer items-center gap-3 rounded-xl p-2.5 transition-colors hover:bg-white/[0.04]"
+              style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}
             >
-              {t.thumbnailUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={t.thumbnailUrl} alt="" className="h-12 w-12 rounded-lg object-cover" />
-              )}
+              <div className="relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg shadow-[var(--shadow-card)]">
+                {t.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={t.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="art-fallback flex h-full w-full items-center justify-center">
+                    <Music2 size={16} className="text-white/25" />
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+                  <Play size={16} fill="white" className="text-white" />
+                </div>
+              </div>
+
               <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">{t.title}</div>
-                <div className="truncate text-sm text-[var(--ink-soft)]">
+                <div className={`truncate text-[14px] font-semibold tracking-tight ${isCurrent ? "text-[var(--brand)]" : ""}`}>
+                  {t.title}
+                </div>
+                <div className="truncate text-[13px] text-[var(--ink-soft)]">
                   {t.artist}
                   {t.album ? ` • ${t.album}` : ""}
                 </div>
               </div>
+
               {t.localMatch && (
                 <span className="rounded-full border border-[var(--brand)]/30 bg-[var(--brand)]/12 px-2 py-0.5 text-[10px] font-bold text-[var(--brand)]">
                   Local
                 </span>
               )}
-              <span className="text-xs text-[var(--ink-dim)]">{formatDuration(t.durationSeconds)}</span>
+              <span className="hidden font-mono text-[11px] tabular-nums text-[var(--ink-dim)] sm:inline">
+                {formatDuration(t.durationSeconds)}
+              </span>
               <button
                 onClick={(e) => addToLibrary(e, t)}
                 disabled={addedIds.has(t.providerTrackId)}
                 title="Ajouter à la bibliothèque"
-                className="rounded-full border border-white/15 px-2 py-1 text-xs font-bold text-[var(--ink-soft)] hover:border-[var(--brand)]/50 hover:text-[var(--brand)] disabled:opacity-40"
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[var(--ink-dim)] transition-colors hover:bg-white/10 hover:text-[var(--brand)] disabled:text-[var(--brand)]"
               >
-                {addedIds.has(t.providerTrackId) ? "✓" : "+"}
+                {addedIds.has(t.providerTrackId) ? <Check size={16} /> : <Plus size={16} />}
               </button>
             </li>
           );

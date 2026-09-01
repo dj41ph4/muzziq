@@ -1,15 +1,126 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
 :root {
-  --ink: #f4f4f5;
-  --ink-soft: #a1a1aa;
-  --ink-dim: #71717a;
-  --bg: #0a0a0b;
-  --panel: #131316;
-  --brand: #22c55e;
+  --bg: #0a0a0c;
+  --bg-elevated: #0f0f12;
+  --panel: #16161a;
+  --panel-2: #1c1c21;
+  --stroke: rgba(255, 255, 255, 0.08);
+  --stroke-strong: rgba(255, 255, 255, 0.14);
+
+  --ink: #f7f7f8;
+  --ink-soft: #a8a8b3;
+  --ink-dim: #6f6f7a;
+
+  --brand: #1ed760;
+  --brand-2: #17b850;
+  --brand-glow: rgba(30, 215, 96, 0.35);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 4px 16px rgba(0, 0, 0, 0.45), 0 16px 40px -12px rgba(0, 0, 0, 0.55);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--bg);
+  background: radial-gradient(120% 100% at 50% -10%, #14181a 0%, var(--bg) 55%);
   color: var(--ink);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
 }
+
+::selection {
+  background: var(--brand-glow);
+}
+
+::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--stroke-strong);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glass {
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--stroke);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
+
+.brand-gradient {
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
+}
+
+.art-fallback {
+  background: linear-gradient(145deg, #2a2a32 0%, #1a1a20 60%, #0f0f13 100%);
+}
+
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.float-in {
+  animation: float-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pulse-ring {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+.pulse-live {
+  animation: pulse-ring 1.8s ease-in-out infinite;
+}
+
+/* Logo animé (porté depuis Movviz AnimatedLogo — mêmes mécanismes CSS : orbite, ripple, halo) */
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes logo-ripple {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+.logo-ripple {
+  animation: logo-ripple 3s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+}
+.logo-halo {
+  background: radial-gradient(circle, var(--brand-glow) 0%, transparent 70%);
+  filter: blur(6px);
+}
+

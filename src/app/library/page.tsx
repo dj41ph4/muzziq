@@ -2,8 +2,10 @@
 
 import useSWR from "swr";
 import { useState } from "react";
+import { RefreshCw, Music2, X, Clock, HardDrive } from "lucide-react";
 import type { MediaFile } from "@/lib/library/mediaFilesStore";
 import { usePlayer } from "@/components/PlayerContext";
+import { TopBar } from "@/components/TopBar";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -20,6 +22,43 @@ interface HistoryEventView {
   type: string;
   at: string;
   recording?: { title: string; artist: string };
+}
+
+function TrackRow({
+  title,
+  artist,
+  album,
+  active,
+  onClick,
+  right,
+}: {
+  title: string;
+  artist: string;
+  album?: string;
+  active?: boolean;
+  onClick?: () => void;
+  right?: React.ReactNode;
+}) {
+  return (
+    <li
+      onClick={onClick}
+      className={`flex items-center gap-3 rounded-xl p-2.5 transition-colors ${
+        onClick ? "cursor-pointer hover:bg-white/[0.04]" : ""
+      } ${active ? "bg-[var(--brand)]/[0.07]" : ""}`}
+    >
+      <div className="art-fallback flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg shadow-[var(--shadow-card)]">
+        <Music2 size={16} className="text-white/25" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className={`truncate text-[14px] font-semibold tracking-tight ${active ? "text-[var(--brand)]" : ""}`}>{title}</div>
+        <div className="truncate text-[13px] text-[var(--ink-soft)]">
+          {artist}
+          {album ? ` • ${album}` : ""}
+        </div>
+      </div>
+      {right}
+    </li>
+  );
 }
 
 export default function LibraryPage() {
@@ -60,85 +99,105 @@ export default function LibraryPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-8 px-6 py-10">
+    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-9 px-5 pt-8 sm:px-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Bibliothèque</h1>
+        <TopBar title="Bibliothèque" />
         <button
           onClick={runScan}
           disabled={scanning}
-          className="rounded-xl bg-[var(--brand)] px-4 py-2 font-bold text-black disabled:opacity-50"
+          className="brand-gradient flex items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-bold text-black shadow-[0_4px_16px_-4px_var(--brand-glow)] transition-transform active:scale-95 disabled:opacity-60"
         >
-          {scanning ? "Scan en cours…" : "Scanner le disque"}
+          <RefreshCw size={14} className={scanning ? "animate-spin" : ""} />
+          {scanning ? "Scan…" : "Scanner"}
         </button>
       </div>
 
-      {scanResult && <p className="text-sm text-[var(--ink-soft)]">{scanResult}</p>}
+      {scanResult && (
+        <p className="glass float-in -mt-4 rounded-xl px-4 py-2.5 text-[13px] text-[var(--ink-soft)]">{scanResult}</p>
+      )}
 
-      <section>
-        <h2 className="mb-2 text-sm font-bold uppercase text-[var(--ink-dim)]">Fichiers locaux ({data?.files?.length ?? 0})</h2>
-        <ul className="flex flex-col gap-2">
+      <section className="float-in">
+        <div className="mb-3 flex items-center gap-2 text-[var(--ink-dim)]">
+          <HardDrive size={14} />
+          <h2 className="text-[13px] font-bold uppercase tracking-wide">Fichiers locaux ({data?.files?.length ?? 0})</h2>
+        </div>
+        <ul className="flex flex-col gap-0.5">
           {data?.files?.map((f) => (
-            <li
+            <TrackRow
               key={f.id}
+              title={f.title}
+              artist={f.artist}
+              album={f.album}
+              active={nowPlaying?.kind === "local" && nowPlaying.id === f.id}
               onClick={() => playLocal(f)}
-              className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 hover:border-[var(--brand)]/50 ${
-                nowPlaying?.kind === "local" && nowPlaying.id === f.id ? "border-[var(--brand)]/60 bg-[var(--brand)]/5" : "border-white/10 bg-[var(--panel)]"
-              }`}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">{f.title}</div>
-                <div className="truncate text-sm text-[var(--ink-soft)]">
-                  {f.artist}
-                  {f.album ? ` • ${f.album}` : ""}
-                </div>
-              </div>
-              <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--ink-dim)]">
-                {f.container}
-                {f.bitsPerSample ? ` ${f.bitsPerSample}bit` : ""}
-                {f.sampleRate ? ` ${(f.sampleRate / 1000).toFixed(1)}kHz` : ""}
-              </span>
-            </li>
+              right={
+                <span className="hidden rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--ink-dim)] sm:inline">
+                  {f.container}
+                  {f.bitsPerSample ? ` ${f.bitsPerSample}b` : ""}
+                  {f.sampleRate ? ` ${(f.sampleRate / 1000).toFixed(1)}k` : ""}
+                </span>
+              }
+            />
           ))}
         </ul>
         {data && data.files.length === 0 && (
-          <p className="text-sm text-[var(--ink-dim)]">Aucun fichier. Configure un dossier musique puis lance un scan.</p>
+          <p className="glass rounded-xl px-4 py-6 text-center text-sm text-[var(--ink-dim)]">
+            Aucun fichier. Configure un dossier musique puis lance un scan.
+          </p>
         )}
       </section>
 
-      <section>
-        <h2 className="mb-2 text-sm font-bold uppercase text-[var(--ink-dim)]">
-          Ajoutés depuis la recherche ({libItems?.items?.length ?? 0})
-        </h2>
-        <ul className="flex flex-col gap-2">
+      <section className="float-in" style={{ animationDelay: "60ms" }}>
+        <div className="mb-3 flex items-center gap-2 text-[var(--ink-dim)]">
+          <Music2 size={14} />
+          <h2 className="text-[13px] font-bold uppercase tracking-wide">Ajoutés depuis la recherche ({libItems?.items?.length ?? 0})</h2>
+        </div>
+        <ul className="flex flex-col gap-0.5">
           {libItems?.items?.map((item) => (
-            <li key={item.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[var(--panel)] p-3">
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold">{item.recording?.title ?? "?"}</div>
-                <div className="truncate text-sm text-[var(--ink-soft)]">{item.recording?.artist}</div>
-              </div>
-              <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-bold text-[var(--ink-dim)]">
-                {item.addPolicy}
-              </span>
-              <button onClick={() => removeItem(item.id)} className="text-xs text-[var(--ink-dim)] hover:text-red-400">
-                Retirer
-              </button>
-            </li>
+            <TrackRow
+              key={item.id}
+              title={item.recording?.title ?? "?"}
+              artist={item.recording?.artist ?? ""}
+              right={
+                <div className="flex items-center gap-2">
+                  <span className="hidden rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-bold text-[var(--ink-dim)] sm:inline">
+                    {item.addPolicy}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeItem(item.id);
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--ink-dim)] transition-colors hover:bg-red-500/10 hover:text-red-400"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              }
+            />
           ))}
         </ul>
         {libItems && libItems.items.length === 0 && (
-          <p className="text-sm text-[var(--ink-dim)]">Rien pour l&apos;instant — ajoute un morceau depuis la recherche.</p>
+          <p className="glass rounded-xl px-4 py-6 text-center text-sm text-[var(--ink-dim)]">
+            Rien pour l&apos;instant — ajoute un morceau depuis la recherche.
+          </p>
         )}
       </section>
 
-      <section>
-        <h2 className="mb-2 text-sm font-bold uppercase text-[var(--ink-dim)]">Historique récent</h2>
-        <ul className="flex flex-col gap-1">
+      <section className="float-in pb-4" style={{ animationDelay: "120ms" }}>
+        <div className="mb-3 flex items-center gap-2 text-[var(--ink-dim)]">
+          <Clock size={14} />
+          <h2 className="text-[13px] font-bold uppercase tracking-wide">Historique récent</h2>
+        </div>
+        <ul className="flex flex-col gap-1.5">
           {history?.events?.slice(0, 10).map((e) => (
-            <li key={e.id} className="flex items-center justify-between text-sm text-[var(--ink-soft)]">
-              <span>
+            <li key={e.id} className="flex items-center justify-between px-2.5 text-[13px] text-[var(--ink-soft)]">
+              <span className="truncate">
                 {e.recording?.title} — {e.recording?.artist}
               </span>
-              <span className="text-[var(--ink-dim)]">{new Date(e.at).toLocaleTimeString()}</span>
+              <span className="flex-shrink-0 font-mono text-[11px] text-[var(--ink-dim)]">
+                {new Date(e.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+              </span>
             </li>
           ))}
         </ul>
