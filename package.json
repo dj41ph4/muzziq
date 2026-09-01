@@ -19,13 +19,15 @@
     "next": "^15.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "swr": "^2.4.2"
+    "swr": "^2.4.2",
+    "webtorrent": "^3.0.21"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
+    "@types/webtorrent": "^3.0.0",
     "postcss": "^8.5.22",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.3"
