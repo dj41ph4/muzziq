@@ -2,10 +2,18 @@
 
 import useSWR from "swr";
 import { useState } from "react";
-import { RefreshCw, Music2, X, Clock, HardDrive } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw, Music2, X, Clock, HardDrive, ListMusic, Download, Sparkles, Settings } from "lucide-react";
 import type { MediaFile } from "@/lib/library/mediaFilesStore";
 import { usePlayer } from "@/components/PlayerContext";
 import { TopBar } from "@/components/TopBar";
+
+const SHORTCUTS = [
+  { href: "/playlists", label: "Playlists", Icon: ListMusic },
+  { href: "/downloads", label: "Téléchargements", Icon: Download },
+  { href: "/assistant", label: "Assistant", Icon: Sparkles },
+  { href: "/settings", label: "Réglages", Icon: Settings },
+];
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -115,6 +123,19 @@ export default function LibraryPage() {
       {scanResult && (
         <p className="glass float-in -mt-4 rounded-xl px-4 py-2.5 text-[13px] text-[var(--ink-soft)]">{scanResult}</p>
       )}
+
+      <div className="float-in -mx-5 flex gap-3 overflow-x-auto px-5 sm:-mx-8 sm:px-8" style={{ scrollbarWidth: "none" }}>
+        {SHORTCUTS.map(({ href, label, Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className="glass flex flex-shrink-0 items-center gap-2 rounded-full px-4 py-2.5 text-[13px] font-semibold text-[var(--ink-soft)] transition-colors hover:text-[var(--ink)]"
+          >
+            <Icon size={15} />
+            {label}
+          </Link>
+        ))}
+      </div>
 
       <section className="float-in">
         <div className="mb-3 flex items-center gap-2 text-[var(--ink-dim)]">
