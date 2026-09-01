@@ -26,6 +26,23 @@ export default function SearchPage() {
 
   const { data: health } = useSWR("/api/providers/youtube-music/health", fetcher, { refreshInterval: 30000 });
   const [playing, setPlaying] = useState<EnrichedTrack | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
+
+  async function play(track: EnrichedTrack) {
+    setPlaying(track);
+    setStreamUrl(null);
+    setStreamError(null);
+    if (track.localMatch) return;
+
+    const res = await fetch(`/api/play/${track.providerTrackId}`);
+    const body = await res.json();
+    if (!res.ok) {
+      setStreamError(`${body.error} (${body.status})`);
+    } else {
+      setStreamUrl(body.url);
+    }
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-6 py-10">
@@ -62,19 +79,18 @@ export default function SearchPage() {
       {playing && (
         <div className="rounded-xl border border-[var(--brand)]/40 bg-[var(--panel)] p-3">
           <div className="mb-2 text-sm font-semibold">
-            {playing.title} — {playing.artist}{" "}
-            <span className="text-[var(--brand)]">
-              {playing.localMatch ? "· Local" : "· Streaming indisponible (PoToken requis)"}
-            </span>
+            {playing.title} — {playing.artist} <span className="text-[var(--brand)]">{playing.localMatch ? "· Local" : "· Streaming"}</span>
           </div>
           {playing.localMatch ? (
             // eslint-disable-next-line jsx-a11y/media-has-caption
             <audio controls autoPlay src={`/api/stream/${playing.localMatch.fileId}`} className="w-full" />
+          ) : streamUrl ? (
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <audio controls autoPlay src={streamUrl} className="w-full" />
+          ) : streamError ? (
+            <p className="text-sm text-red-400">{streamError}</p>
           ) : (
-            <p className="text-sm text-[var(--ink-dim)]">
-              Voir docs/reverse-engineering/youtube-music — la lecture YouTube Music nécessite un PoToken, pas
-              encore implémenté.
-            </p>
+            <p className="text-sm text-[var(--ink-dim)]">Résolution du flux…</p>
           )}
         </div>
       )}
@@ -83,7 +99,7 @@ export default function SearchPage() {
         {data?.tracks?.map((t) => (
           <li
             key={t.providerTrackId}
-            onClick={() => setPlaying(t)}
+            onClick={() => play(t)}
             className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-[var(--panel)] p-3 hover:border-[var(--brand)]/50"
           >
             {t.thumbnailUrl && (

@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Process-wide cache for the JSON files that back every MUZZIK store.
@@ -123,8 +124,16 @@ function startFileWrite(file: string, val: unknown) {
   const json = JSON.stringify(val, null, 2);
   const tmp = `${file}.tmp`;
 
+  // Bug réel trouvé en test (2026-09-01) : le premier write d'un store
+  // JAMAIS écrit avant échouait silencieusement (ENOENT, avalé par le
+  // .catch plus bas) parce que le dossier .muzzik-data n'existe pas encore.
+  // Les lectures suivantes semblaient marcher (servies par le cache mémoire
+  // `pending`), masquant totalement l'échec — rien n'était jamais persisté
+  // sur disque. mkdir recursive avant chaque write neutralise la classe
+  // entière du problème, pas seulement ce cas précis.
   fs.promises
-    .writeFile(tmp, json, "utf8")
+    .mkdir(path.dirname(file), { recursive: true })
+    .then(() => fs.promises.writeFile(tmp, json, "utf8"))
     .then(() => fs.promises.rename(tmp, file))
     .then(() => fs.promises.stat(file))
     .then((stat) => {

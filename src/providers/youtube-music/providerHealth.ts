@@ -1,4 +1,5 @@
-import { innertubeSearch, innertubePlayer, InnertubeError } from "./innertubeClient";
+import { innertubeSearch, InnertubeError } from "./innertubeClient";
+import { resolveStreamUrl } from "./ytDlpResolver";
 import type { ProviderHealthReport, ProviderProbeStatus } from "@/lib/contracts/music";
 
 /**
@@ -22,22 +23,14 @@ async function probeSearch(): Promise<{ status: ProviderProbeStatus; detail?: st
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function probePlayer(): Promise<{ status: ProviderProbeStatus; detail?: string }> {
+  // Sonde le chemin RÉEL utilisé par resolvePlayback (InnerTube d'abord,
+  // repli yt-dlp) — vidéo de test stable et connue publique.
   try {
-    // Vidéo de test volontairement stable et connue publique.
-    const raw: any = await innertubePlayer("jNQXAC9IVRw");
-    const status = raw?.playabilityStatus?.status;
-    if (status === "OK" && raw?.streamingData) return { status: "OK" };
-    if (status === "LOGIN_REQUIRED") {
-      return { status: "AUTH_REQUIRED", detail: "PoToken requis en mode anonyme (voir playbackResolver.ts)" };
-    }
-    return { status: "DEGRADED", detail: `playabilityStatus=${status ?? "absent"}` };
+    await resolveStreamUrl("jNQXAC9IVRw");
+    return { status: "OK", detail: "via yt-dlp (InnerTube anonyme bloqué, voir docs/reverse-engineering)" };
   } catch (err) {
-    if (err instanceof InnertubeError) {
-      return { status: err.httpStatus === 429 ? "RATE_LIMITED" : "BROKEN", detail: err.message };
-    }
-    return { status: "BROKEN", detail: String(err) };
+    return { status: "BROKEN", detail: err instanceof Error ? err.message : String(err) };
   }
 }
 

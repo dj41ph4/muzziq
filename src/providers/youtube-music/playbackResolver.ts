@@ -1,37 +1,41 @@
 import { innertubePlayer } from "./innertubeClient";
+import { resolveStreamUrl } from "./ytDlpResolver";
 import type { PlaybackResolution } from "@/lib/contracts/music";
 
 /**
- * Résolution de flux réelle — PAS encore fonctionnelle en mode anonyme.
+ * Résolution de flux (plan §12/§13).
  *
- * Sondé en conditions réelles le 2026-09-01 sur 6 contextes client
- * (WEB_REMIX, ANDROID_MUSIC, IOS_MUSIC, WEB, MWEB, TVHTML5_SIMPLY_EMBEDDED) :
- * tous renvoient LOGIN_REQUIRED ou UNPLAYABLE sans PoToken (jeton anti-bot
- * généré par un challenge BotGuard). Ce n'est pas une régression du code —
- * c'est l'état réel de la protection YouTube au moment du sondage (même
- * limite documentée par les projets yt-dlp/ytmusicapi).
- *
- * Règle absolue du plan d'architecture (§79, INTERDIT) : ne jamais fabriquer
- * un flux de lecture qui ne marche pas. Cette fonction renvoie un échec
- * explicite et typé plutôt qu'une URL invalide — c'est à ProviderHealth (§16)
- * de rendre ce statut visible, et au Playback Resolver MUZZIK (§12, pas
- * encore construit) de retomber sur une autre source le cas échéant.
- *
- * Prochaine étape pour lever cette limite : implémenter un PoTokenManager
- * (§13 du plan) — génère un PoToken via un solveur BotGuard (VM JS headless,
- * pattern documenté par bgutil-ytdlp-pot-provider). C'est un sous-projet à
- * part entière, pas une correction ponctuelle.
+ * InnerTube en anonyme (WEB_REMIX et 5 autres contextes testés le
+ * 2026-09-01, voir docs/reverse-engineering/youtube-music) est bloqué sans
+ * PoToken. Repli sur yt-dlp en subprocess (§105/réflexion d'architecture —
+ * réutilisation d'une librairie mature plutôt que réimplémenter un
+ * solveur BotGuard, §87.4). Le chemin InnerTube reste tenté en premier et
+ * n'est jamais supprimé : si YouTube change de comportement demain (ou
+ * qu'un PoTokenManager maison est construit plus tard), ce chemin redevient
+ * actif sans rien retoucher côté appelant.
  */
 export async function resolveYoutubeMusicPlayback(videoId: string): Promise<PlaybackResolution> {
+  const innertubeResult = await tryInnertube(videoId);
+  if (innertubeResult) return innertubeResult;
+
+  try {
+    const format = await resolveStreamUrl(videoId);
+    return {
+      ok: true,
+      source: { type: "PROVIDER", url: format.url, codec: format.acodec ?? format.ext, bitrate: format.abr },
+    };
+  } catch (err) {
+    return { ok: false, status: "BROKEN", reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Renvoie une résolution si InnerTube a réussi, ou `null` pour signaler "tenter le repli yt-dlp". */
+async function tryInnertube(videoId: string): Promise<PlaybackResolution | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw: any = await innertubePlayer(videoId);
   const status = raw?.playabilityStatus?.status;
-  const reason = raw?.playabilityStatus?.reason ?? "Raison inconnue";
 
   if (status === "OK" && raw?.streamingData) {
-    // Chemin non encore atteint en conditions réelles (voir commentaire
-    // ci-dessus) — laissé en place pour le jour où un PoTokenManager
-    // débloque ce statut, plutôt que de deviner la forme exacte maintenant.
     const audioFormats = (raw.streamingData.adaptiveFormats ?? []).filter((f: { mimeType?: string }) =>
       f.mimeType?.startsWith("audio")
     );
@@ -45,9 +49,5 @@ export async function resolveYoutubeMusicPlayback(videoId: string): Promise<Play
       };
     }
   }
-
-  if (status === "LOGIN_REQUIRED") {
-    return { ok: false, status: "AUTH_REQUIRED", reason: `${reason} — PoToken requis (non implémenté)` };
-  }
-  return { ok: false, status: "BROKEN", reason: `playabilityStatus=${status ?? "absent"} (${reason})` };
+  return null;
 }
