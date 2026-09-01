@@ -14,7 +14,7 @@ import { DATA_DIR } from "@/lib/config";
  * plutôt qu'un `engine/` séparé comme Movviz — simplification délibérée pour
  * ce premier bootstrap (§105.3, ne pas construire la complexité avant qu'un
  * besoin réel — perf, isolation crash — ne l'exige). Anchoring globalThis
- * (règle les règles opérationnelles du projet #2) pour survivre au découpage en bundles par route.
+ * (voir les règles opérationnelles du projet) pour survivre au découpage en bundles par route.
  */
 
 export const DOWNLOAD_INCOMPLETE_DIR = path.join(DATA_DIR, "downloads", "incomplete");
