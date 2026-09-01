@@ -1,6 +1,8 @@
 import { listRecentEvents, type PlaybackEvent } from "@/lib/history/playbackEventsStore";
 import { listRecordings, type Recording } from "@/lib/library/recordingsStore";
 import { listLibraryItems } from "@/lib/library/libraryItemsStore";
+import { getTopArtistAffinities } from "@/lib/userContext/preferences";
+import { DEFAULT_USER_ID } from "@/lib/userContext/types";
 
 /**
  * DeterministicRecommendationEngine (plan §44) — pas de couche IA ici,
@@ -46,15 +48,26 @@ export function getRecentlyAdded(limit = 10): Recording[] {
  * de données ne le justifie pas — resterait un chiffre inventé sur un
  * historique quasi vide.
  */
-export function getBecauseYouLike(limit = 10): { artist: string; recordings: Recording[] } | null {
-  const events = listRecentEvents(200).filter((e) => e.type === "PLAY_START");
+export async function getBecauseYouLike(limit = 10): Promise<{ artist: string; recordings: Recording[] } | null> {
   const recordings = listRecordings();
-  const playedRecordings = events.map((e) => recordings.find((r) => r.id === e.recordingId)).filter((r): r is Recording => !!r);
-  if (playedRecordings.length === 0) return null;
 
-  const artistCounts = new Map<string, number>();
-  for (const r of playedRecordings) artistCounts.set(r.artist, (artistCounts.get(r.artist) ?? 0) + 1);
-  const topArtist = [...artistCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  // Priorité au Context Engine SQL (plan §45, affinité pondérée par
+  // confiance — un skip peut faire redescendre un artiste, pas juste
+  // compter des lectures brutes) ; repli sur le comptage JSON si la DB
+  // contexte est indisponible/désactivée (MUZZIK_CONTEXT_ENGINE_DISABLED)
+  // ou encore vide (tout juste démarré, aucune preuve accumulée).
+  const topAffinities = await getTopArtistAffinities(DEFAULT_USER_ID, 1);
+  let topArtist = topAffinities[0]?.artist;
+
+  const events = listRecentEvents(200).filter((e) => e.type === "PLAY_START");
+  const playedRecordings = events.map((e) => recordings.find((r) => r.id === e.recordingId)).filter((r): r is Recording => !!r);
+
+  if (!topArtist) {
+    if (playedRecordings.length === 0) return null;
+    const artistCounts = new Map<string, number>();
+    for (const r of playedRecordings) artistCounts.set(r.artist, (artistCounts.get(r.artist) ?? 0) + 1);
+    topArtist = [...artistCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  }
 
   const recentlyPlayedIds = new Set(playedRecordings.slice(0, 5).map((r) => r.id));
   const others = recordings.filter((r) => r.artist === topArtist && !recentlyPlayedIds.has(r.id));
@@ -62,7 +75,7 @@ export function getBecauseYouLike(limit = 10): { artist: string; recordings: Rec
   return { artist: topArtist, recordings: dedupe(others).slice(0, limit) };
 }
 
-export function getHomeRows(): HomeRow[] {
+export async function getHomeRows(): Promise<HomeRow[]> {
   const rows: HomeRow[] = [];
 
   const continueListening = getContinueListening();
@@ -71,7 +84,7 @@ export function getHomeRows(): HomeRow[] {
   const recentlyAdded = getRecentlyAdded();
   if (recentlyAdded.length > 0) rows.push({ id: "recent", title: "Récemment ajoutés", recordings: recentlyAdded });
 
-  const because = getBecauseYouLike();
+  const because = await getBecauseYouLike();
   if (because && because.recordings.length > 0) {
     rows.push({ id: "because", title: `Parce que vous aimez ${because.artist}`, recordings: because.recordings });
   }

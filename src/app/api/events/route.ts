@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { recordEvent, listRecentEvents } from "@/lib/history/playbackEventsStore";
 import { listRecordings } from "@/lib/library/recordingsStore";
 import { findOrCreateRecordingFromExternal } from "@/lib/library/recordingResolution";
+import { recordPlaybackStartedContext } from "@/lib/userContext/ingest";
+import { adjustArtistAffinity } from "@/lib/userContext/preferences";
+import { DEFAULT_USER_ID } from "@/lib/userContext/types";
 
 export const dynamic = "force-dynamic";
 
@@ -25,5 +28,21 @@ export async function POST(req: Request) {
   }
   const recording = findOrCreateRecordingFromExternal(body);
   const event = recordEvent({ recordingId: recording.id, type: body.type, source: body.source });
+
+  // Additif — jamais bloquant : le Context Engine SQLite (plan §45, porté de
+  // Movviz) alimente le contexte MUZZIK AI en plus du store JSON existant,
+  // jamais à sa place. Une DB indisponible/désactivée ne doit jamais casser
+  // la lecture (withUserContextDb dégrade déjà en no-op silencieux).
+  if (body.type === "PLAY_START") {
+    await recordPlaybackStartedContext({
+      userId: DEFAULT_USER_ID,
+      recordingId: recording.id,
+      title: recording.title,
+      artist: recording.artist,
+      durationMs: recording.durationSeconds ? recording.durationSeconds * 1000 : undefined,
+    });
+    await adjustArtistAffinity(DEFAULT_USER_ID, recording.artist, 0.6);
+  }
+
   return NextResponse.json({ ...event, recording });
 }
