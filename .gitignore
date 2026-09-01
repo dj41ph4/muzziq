@@ -1,0 +1,32 @@
+# dependencies
+/node_modules
+/engine/node_modules
+/resolver/node_modules
+
+# runtime data — never committed (real music library / config / secrets)
+/.muzzik-data
+/engine/.muzzik-data
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# production / installers
+/build
+/dist
+
+# misc
+.DS_Store
+Thumbs.db
+*.pem
+
+# env
+.env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# AI assistant local config — not part of the shipped product
+.claude/

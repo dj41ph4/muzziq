@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #f4f4f5;
+  --ink-soft: #a1a1aa;
+  --ink-dim: #71717a;
+  --bg: #0a0a0b;
+  --panel: #131316;
+  --brand: #22c55e;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+}
