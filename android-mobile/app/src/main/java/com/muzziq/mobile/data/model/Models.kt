@@ -225,6 +225,64 @@ data class HomeRowDto(
 @JsonClass(generateAdapter = true)
 data class HomeRowsResponse(val rows: List<HomeRowDto> = emptyList())
 
+/** Reflet de GET /api/artists /api/artists/{id} /api/albums /api/albums/{id} — ne
+ * couvre QUE la bibliothèque locale déjà scannée côté serveur, aucune agrégation
+ * inventée. id d'artiste = nom en minuscule ; id d'album = "artiste::album" en
+ * minuscule (voir la documentation serveur pour le détail). Pas de browse du
+ * catalogue YouTube Music (recherche uniquement, voir docs/reverse-engineering). */
+@JsonClass(generateAdapter = true)
+data class ArtistSummaryDto(
+    val id: String,
+    val name: String,
+    val trackCount: Int = 0,
+    val albumCount: Int = 0,
+)
+
+@JsonClass(generateAdapter = true)
+data class ArtistsResponse(val artists: List<ArtistSummaryDto> = emptyList())
+
+@JsonClass(generateAdapter = true)
+data class ArtistAlbumDto(val title: String, val trackCount: Int = 0)
+
+@JsonClass(generateAdapter = true)
+data class ArtistTrackDto(val id: String, val title: String, val album: String? = null, val durationSeconds: Double? = null)
+
+@JsonClass(generateAdapter = true)
+data class ArtistDetailResponse(
+    val id: String,
+    val name: String,
+    val trackCount: Int = 0,
+    val albums: List<ArtistAlbumDto> = emptyList(),
+    val tracks: List<ArtistTrackDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class AlbumSummaryDto(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val trackCount: Int = 0,
+)
+
+@JsonClass(generateAdapter = true)
+data class AlbumsResponse(val albums: List<AlbumSummaryDto> = emptyList())
+
+@JsonClass(generateAdapter = true)
+data class AlbumTrackDto(
+    val id: String,
+    val title: String,
+    val trackNumber: Int? = null,
+    val durationSeconds: Double? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class AlbumDetailResponse(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val tracks: List<AlbumTrackDto> = emptyList(),
+)
+
 /** GET /api/updates/android — mise à jour auto-hébergée (§56.3). */
 @JsonClass(generateAdapter = true)
 data class AndroidUpdateInfo(

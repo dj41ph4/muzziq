@@ -2,7 +2,11 @@ package com.muzziq.mobile.data
 
 import com.muzziq.mobile.data.model.AddLibraryItemRequest
 import com.muzziq.mobile.data.model.AddPlaylistItemRequest
+import com.muzziq.mobile.data.model.AlbumDetailResponse
+import com.muzziq.mobile.data.model.AlbumsResponse
 import com.muzziq.mobile.data.model.AndroidUpdateInfo
+import com.muzziq.mobile.data.model.ArtistDetailResponse
+import com.muzziq.mobile.data.model.ArtistsResponse
 import com.muzziq.mobile.data.model.CreatePlaylistRequest
 import com.muzziq.mobile.data.model.HealthResponse
 import com.muzziq.mobile.data.model.HomeRowsResponse
@@ -100,6 +104,20 @@ interface MuzziqApi {
 
     @GET("/api/capabilities")
     suspend fun capabilities(): Response<ServerCapabilitiesResponse>
+
+    /** Bibliothèque locale déjà scannée côté serveur uniquement — aucune agrégation
+     * inventée, pas de browse du catalogue YouTube Music (recherche uniquement). */
+    @GET("/api/artists")
+    suspend fun artists(): Response<ArtistsResponse>
+
+    @GET("/api/artists/{id}")
+    suspend fun artistDetail(@Path("id") id: String): Response<ArtistDetailResponse>
+
+    @GET("/api/albums")
+    suspend fun albums(): Response<AlbumsResponse>
+
+    @GET("/api/albums/{id}")
+    suspend fun albumDetail(@Path("id") id: String): Response<AlbumDetailResponse>
 }
 
 object ApiClientFactory {

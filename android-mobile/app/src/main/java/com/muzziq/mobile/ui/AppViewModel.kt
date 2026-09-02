@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.muzziq.mobile.data.ApiClientFactory
 import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.data.AppPrefs
+import com.muzziq.mobile.data.MuzziqApi
 import com.muzziq.mobile.data.MusicSource
 import com.muzziq.mobile.data.QueueStateStore
 import com.muzziq.mobile.data.QueueStateStore.Companion.toTrack
@@ -50,6 +51,15 @@ sealed interface RootUiState {
  * mapping DTO serveur vers Track vit dans AppViewModel, pas dans l'écran. */
 data class HomeRowUi(val id: String, val title: String, val tracks: List<Track>)
 
+/** Browse artiste/album (§17, plan) — ne couvre QUE la bibliothèque locale déjà
+ * scannée (serveur ou standalone), aucune agrégation inventée. En mode Lié, id/
+ * champs viennent de /api/artists /api/albums (voir Models.kt) ; en standalone,
+ * calculés côté client par groupement du Track déjà chargé — même id de secours
+ * (artiste en minuscule, "artiste::album" en minuscule) pour que le code de
+ * navigation (openArtist/openAlbum) reste identique dans les deux modes. */
+data class ArtistUi(val id: String, val name: String, val trackCount: Int, val albumCount: Int)
+data class AlbumUi(val id: String, val title: String, val artist: String, val trackCount: Int)
+
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Le paramètre de constructeur `application` (sans val) n'est capturé que dans les
     // initializers de propriété/blocs `by lazy` — pas dans le corps des fonctions membres
@@ -85,6 +95,95 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _history.value = standalone.recentHistory()
         }
+    }
+
+    /** Browse artiste/album — /api/artists /api/albums en mode Lié (bibliothèque locale
+     * déjà scannée côté serveur, aucun browse du catalogue YouTube Music), groupement
+     * client de la bibliothèque locale en standalone. [browseApi] non nul uniquement
+     * après activateLinked(). */
+    private var browseApi: MuzziqApi? = null
+    private val _artists = MutableStateFlow<List<ArtistUi>>(emptyList())
+    val artists: StateFlow<List<ArtistUi>> = _artists.asStateFlow()
+    private val _albums = MutableStateFlow<List<AlbumUi>>(emptyList())
+    val albums: StateFlow<List<AlbumUi>> = _albums.asStateFlow()
+    private val _browseTracks = MutableStateFlow<List<Track>>(emptyList())
+    val browseTracks: StateFlow<List<Track>> = _browseTracks.asStateFlow()
+
+    fun refreshArtistsAlbums() {
+        viewModelScope.launch {
+            val api = browseApi
+            if (api != null) {
+                val artistsBody = runCatching { api.artists() }.getOrNull()?.takeIf { it.isSuccessful }?.body()
+                _artists.value = artistsBody?.artists.orEmpty().map { ArtistUi(it.id, it.name, it.trackCount, it.albumCount) }
+                val albumsBody = runCatching { api.albums() }.getOrNull()?.takeIf { it.isSuccessful }?.body()
+                _albums.value = albumsBody?.albums.orEmpty().map { AlbumUi(it.id, it.title, it.artist, it.trackCount) }
+            } else {
+                val tracks = standalone.library().getOrNull().orEmpty()
+                _artists.value = tracks.groupBy { it.artist }
+                    .map { (artist, list) ->
+                        ArtistUi(
+                            id = artist.lowercase(),
+                            name = artist,
+                            trackCount = list.size,
+                            albumCount = list.mapNotNull { it.album }.distinct().size,
+                        )
+                    }
+                    .sortedBy { it.name.lowercase() }
+                _albums.value = tracks.filter { it.album != null }
+                    .groupBy { "${it.artist}::${it.album}".lowercase() }
+                    .map { (groupId, list) -> AlbumUi(id = groupId, title = list.first().album.orEmpty(), artist = list.first().artist, trackCount = list.size) }
+                    .sortedBy { it.title.lowercase() }
+            }
+        }
+    }
+
+    fun openArtist(id: String) {
+        viewModelScope.launch {
+            val api = browseApi
+            if (api != null) {
+                val body = runCatching { api.artistDetail(id) }.getOrNull()?.takeIf { it.isSuccessful }?.body()
+                _browseTracks.value = body?.tracks.orEmpty().map { t ->
+                    Track(
+                        id = t.id,
+                        title = t.title,
+                        artist = body?.name.orEmpty(),
+                        album = t.album,
+                        durationSeconds = t.durationSeconds,
+                        artworkUrl = null,
+                        source = TrackSource.Server(t.id),
+                    )
+                }
+            } else {
+                _browseTracks.value = standalone.library().getOrNull().orEmpty().filter { it.artist.lowercase() == id }
+            }
+        }
+    }
+
+    fun openAlbum(id: String) {
+        viewModelScope.launch {
+            val api = browseApi
+            if (api != null) {
+                val body = runCatching { api.albumDetail(id) }.getOrNull()?.takeIf { it.isSuccessful }?.body()
+                _browseTracks.value = body?.tracks.orEmpty().map { t ->
+                    Track(
+                        id = t.id,
+                        title = t.title,
+                        artist = body?.artist.orEmpty(),
+                        album = body?.title,
+                        durationSeconds = t.durationSeconds,
+                        artworkUrl = null,
+                        source = TrackSource.Server(t.id),
+                    )
+                }
+            } else {
+                _browseTracks.value = standalone.library().getOrNull().orEmpty()
+                    .filter { "${it.artist}::${it.album}".lowercase() == id }
+            }
+        }
+    }
+
+    fun closeBrowseDetail() {
+        _browseTracks.value = emptyList()
     }
 
     private val _searchResults = MutableStateFlow<List<Track>>(emptyList())
@@ -289,12 +388,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         MusicSourceLocator.set(standalone)
         downloadRepository = StandaloneDownloadRepository(standalone)
         playlistRepository = RoomPlaylistRepository(appContext).also { PlaylistRepositoryLocator.set(it) }
+        browseApi = null
         _homeRows.value = emptyList()
         _state.value = RootUiState.Ready(AppMode.STANDALONE)
         refreshLibrary()
         refreshDownloads()
         refreshPlaylists()
         refreshHistory()
+        refreshArtistsAlbums()
         restorePersistedQueue()
     }
 
@@ -306,6 +407,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         MusicSourceLocator.set(source)
         downloadRepository = ServerDownloadRepository(appContext, source)
         playlistRepository = ServerPlaylistRepository(url, cookie).also { PlaylistRepositoryLocator.set(it) }
+        browseApi = ApiClientFactory.create(url)
         _state.value = RootUiState.Ready(AppMode.LINKED)
         refreshLibrary()
         refreshServerCapabilities(url)
@@ -313,6 +415,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refreshPlaylists()
         refreshHomeRows(url)
         refreshHistory()
+        refreshArtistsAlbums()
         restorePersistedQueue()
     }
 

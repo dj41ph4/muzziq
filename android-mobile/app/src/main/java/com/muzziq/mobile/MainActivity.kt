@@ -118,6 +118,9 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             var expanded by remember { mutableStateOf(false) }
 
             val library by vm.library.collectAsStateWithLifecycle()
+            val artists by vm.artists.collectAsStateWithLifecycle()
+            val albums by vm.albums.collectAsStateWithLifecycle()
+            val browseTracks by vm.browseTracks.collectAsStateWithLifecycle()
             val homeRows by vm.homeRows.collectAsStateWithLifecycle()
             val searchResults by vm.searchResults.collectAsStateWithLifecycle()
             val busy by vm.busy.collectAsStateWithLifecycle()
@@ -188,7 +191,20 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                     when (Tab.entries[tab]) {
                         Tab.HOME -> HomeScreen(s.mode, library, homeRows, padding) { vm.playFrom(library, it) }
                         Tab.SEARCH -> SearchScreen(s.mode, query, { query = it; vm.search(it) }, searchResults, padding) { vm.playFrom(searchResults, it) }
-                        Tab.LIBRARY -> LibraryScreen(s.mode, library, busy, padding, onRescan = { vm.rescanStandaloneLibrary() }) { vm.playFrom(library, it) }
+                        Tab.LIBRARY -> LibraryScreen(
+                            mode = s.mode,
+                            tracks = library,
+                            artists = artists,
+                            albums = albums,
+                            browseTracks = browseTracks,
+                            busy = busy,
+                            contentPadding = padding,
+                            onRescan = { vm.rescanStandaloneLibrary() },
+                            onSelectArtist = { vm.openArtist(it) },
+                            onSelectAlbum = { vm.openAlbum(it) },
+                            onCloseBrowseDetail = { vm.closeBrowseDetail() },
+                            onTrackClick = { vm.playFrom(if (browseTracks.isNotEmpty()) browseTracks else library, it) },
+                        )
                         Tab.PLAYLISTS -> PlaylistsScreen(
                             playlists = playlists,
                             openPlaylistId = openPlaylistId,
