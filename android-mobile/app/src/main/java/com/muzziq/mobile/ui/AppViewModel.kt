@@ -26,6 +26,7 @@ import com.muzziq.mobile.domain.ServerPlaylistRepository
 import com.muzziq.mobile.domain.StandaloneDownloadRepository
 import com.muzziq.mobile.playback.MusicSourceLocator
 import com.muzziq.mobile.playback.PlayerController
+import com.muzziq.mobile.standalone.HistoryEntry
 import com.muzziq.mobile.standalone.MigrationManager
 import com.muzziq.mobile.standalone.StandaloneMusicSource
 import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
@@ -72,6 +73,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * la liste "Bibliothèque" à plat, jamais un carrousel vide affiché pour faire joli. */
     private val _homeRows = MutableStateFlow<List<HomeRowUi>>(emptyList())
     val homeRows: StateFlow<List<HomeRowUi>> = _homeRows.asStateFlow()
+
+    /** Historique d'écoute (plan §41) — standalone uniquement aujourd'hui : PlaybackService
+     * n'enregistre un événement que pour un morceau local (TrackSource.Local), le mode
+     * Lié ne pousse rien vers le serveur pour l'instant. Vide en Lié, jamais fabriqué. */
+    private val _history = MutableStateFlow<List<HistoryEntry>>(emptyList())
+    val history: StateFlow<List<HistoryEntry>> = _history.asStateFlow()
+
+    fun refreshHistory() {
+        viewModelScope.launch {
+            _history.value = standalone.recentHistory()
+        }
+    }
 
     private val _searchResults = MutableStateFlow<List<Track>>(emptyList())
     val searchResults: StateFlow<List<Track>> = _searchResults.asStateFlow()
@@ -280,6 +293,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refreshLibrary()
         refreshDownloads()
         refreshPlaylists()
+        refreshHistory()
         restorePersistedQueue()
     }
 
@@ -297,6 +311,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refreshDownloads()
         refreshPlaylists()
         refreshHomeRows(url)
+        refreshHistory()
         restorePersistedQueue()
     }
 

@@ -171,7 +171,53 @@ class LocalTasteDatabase(context: Context) :
         }
         return out
     }
+
+    /** Historique d'écoute (plan §41) — jointure play_events/local_tracks : un morceau
+     * dont le fichier a disparu depuis (rescan, suppression) sort naturellement de la
+     * liste plutôt que d'afficher une entrée cassée. [rawLimit] borne la requête SQL
+     * avant dédoublonnage Kotlin (plusieurs écoutes du même morceau → une seule entrée,
+     * la plus récente), donc peut renvoyer moins de [displayLimit] entrées distinctes. */
+    fun recentPlayEvents(displayLimit: Int = 50, rawLimit: Int = 300): List<HistoryEntryRow> {
+        val db = readableDatabase
+        val out = mutableListOf<HistoryEntryRow>()
+        val seen = mutableSetOf<String>()
+        db.rawQuery(
+            """
+            SELECT lt.content_uri, lt.title, lt.artist, lt.album, lt.duration_seconds, lt.album_id, pe.played_at
+            FROM play_events pe
+            JOIN local_tracks lt ON pe.content_uri = lt.content_uri
+            ORDER BY pe.played_at DESC
+            LIMIT ?
+            """.trimIndent(),
+            arrayOf(rawLimit.toString())
+        ).use { c ->
+            while (c.moveToNext() && out.size < displayLimit) {
+                val contentUri = c.getString(0)
+                if (!seen.add(contentUri)) continue
+                out += HistoryEntryRow(
+                    contentUri = contentUri,
+                    title = c.getString(1),
+                    artist = c.getString(2),
+                    album = c.getString(3),
+                    durationSeconds = if (c.isNull(4)) null else c.getDouble(4),
+                    albumId = if (c.isNull(5)) null else c.getLong(5),
+                    playedAt = c.getLong(6),
+                )
+            }
+        }
+        return out
+    }
 }
+
+data class HistoryEntryRow(
+    val contentUri: String,
+    val title: String,
+    val artist: String,
+    val album: String?,
+    val durationSeconds: Double?,
+    val albumId: Long?,
+    val playedAt: Long,
+)
 
 data class LocalTrackRow(
     val contentUri: String,

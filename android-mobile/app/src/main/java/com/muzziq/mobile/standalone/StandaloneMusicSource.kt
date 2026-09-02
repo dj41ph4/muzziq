@@ -57,6 +57,26 @@ class StandaloneMusicSource(context: Context) : MusicSource {
     /** Bibliothèque locale complète, exposée pour la synchronisation Standalone → Lié (§56.4). */
     suspend fun rawTracks(): List<LocalTrackRow> = withContext(Dispatchers.IO) { db.listTracks() }
 
+    /** Historique d'écoute (plan §41) — standalone uniquement : [recordPlayback] n'écrit
+     * rien pour un morceau serveur (TrackSource.Server), donc le mode Lié n'a aucune
+     * entrée ici, jamais une liste fabriquée pour combler l'absence. */
+    suspend fun recentHistory(limit: Int = 50): List<HistoryEntry> = withContext(Dispatchers.IO) {
+        db.recentPlayEvents(limit).map { row ->
+            HistoryEntry(
+                track = Track(
+                    id = row.contentUri,
+                    title = row.title,
+                    artist = row.artist,
+                    album = row.album,
+                    durationSeconds = row.durationSeconds,
+                    artworkUrl = row.albumId?.let { scanner.albumArtUri(it).toString() },
+                    source = TrackSource.Local(row.contentUri),
+                ),
+                playedAt = row.playedAt,
+            )
+        }
+    }
+
     private fun LocalTrackRow.toTrack() = Track(
         id = contentUri,
         title = title,
@@ -75,3 +95,6 @@ class StandaloneMusicSource(context: Context) : MusicSource {
                 "disponible sur Android)."
     }
 }
+
+/** Une entrée d'historique — le morceau + le moment de lecture (plan §41). */
+data class HistoryEntry(val track: Track, val playedAt: Long)

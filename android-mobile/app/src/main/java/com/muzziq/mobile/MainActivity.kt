@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.QueueMusic
@@ -46,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.ui.AppViewModel
 import com.muzziq.mobile.ui.RootUiState
+import com.muzziq.mobile.ui.history.HistoryScreen
 import com.muzziq.mobile.ui.home.HomeScreen
 import com.muzziq.mobile.ui.library.LibraryScreen
 import com.muzziq.mobile.ui.onboarding.OnboardingScreen
@@ -82,7 +84,7 @@ class MainActivity : ComponentActivity() {
         else Manifest.permission.READ_EXTERNAL_STORAGE
 }
 
-private enum class Tab(val label: String) { HOME("Accueil"), SEARCH("Recherche"), LIBRARY("Bibliothèque"), PLAYLISTS("Playlists") }
+private enum class Tab(val label: String) { HOME("Accueil"), SEARCH("Recherche"), LIBRARY("Bibliothèque"), PLAYLISTS("Playlists"), HISTORY("Historique") }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -129,6 +131,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             val playlists by vm.playlists.collectAsStateWithLifecycle()
             val openPlaylistId by vm.openPlaylistId.collectAsStateWithLifecycle()
             val playlistTracks by vm.playlistTracks.collectAsStateWithLifecycle()
+            val history by vm.history.collectAsStateWithLifecycle()
             var showPlaylistPicker by remember { mutableStateOf(false) }
 
             LaunchedEffect(currentTrack) {
@@ -170,6 +173,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                                                     Tab.SEARCH -> Icons.Rounded.Search
                                                     Tab.LIBRARY -> Icons.Rounded.LibraryMusic
                                                     Tab.PLAYLISTS -> Icons.Rounded.QueueMusic
+                                                    Tab.HISTORY -> Icons.Rounded.History
                                                 },
                                                 contentDescription = t.label,
                                             )
@@ -196,6 +200,12 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             onClosePlaylist = { vm.closePlaylist() },
                             onRemoveTrack = { playlistId, trackId -> vm.removeFromPlaylist(playlistId, trackId) },
                             onTrackClick = { vm.playFrom(playlistTracks, it) },
+                        )
+                        Tab.HISTORY -> HistoryScreen(
+                            mode = s.mode,
+                            entries = history,
+                            contentPadding = padding,
+                            onTrackClick = { vm.playFrom(history.map { entry -> entry.track }, it) },
                         )
                     }
                 }
