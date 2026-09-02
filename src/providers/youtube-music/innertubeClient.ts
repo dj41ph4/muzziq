@@ -12,6 +12,8 @@
  * music.youtube.com (envoyée à chaque navigateur, pas un secret serveur).
  */
 
+import { getSignatureTimestamp } from "./signatureTimestamp";
+
 const API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30";
 const CLIENT_VERSION = "1.20241201.01.00";
 const BASE_URL = "https://music.youtube.com/youtubei/v1";
@@ -71,6 +73,22 @@ export function innertubeSearch(query: string, params?: string): Promise<unknown
   return post("search", { query, ...(params ? { params } : {}) });
 }
 
-export function innertubePlayer(videoId: string): Promise<unknown> {
-  return post("player", { videoId, contentCheckOk: true, racyCheckOk: true });
+/**
+ * Correctif réel du 2026-09-02 : sans `playbackContext.contentPlaybackContext.
+ * signatureTimestamp`, `/player` répond `UNPLAYABLE` en anonyme — pas parce
+ * qu'un PoToken est exigé (conclusion erronée du 2026-09-01, voir
+ * docs/reverse-engineering/youtube-music), mais simplement parce que ce champ,
+ * présent dans tout appel réel émis par music.youtube.com, était absent.
+ * `getSignatureTimestamp()` ne bloque jamais : `null` en cas d'échec de
+ * récupération, le champ est alors simplement omis (résultat identique à
+ * avant ce correctif, jamais pire).
+ */
+export async function innertubePlayer(videoId: string): Promise<unknown> {
+  const sts = await getSignatureTimestamp();
+  return post("player", {
+    videoId,
+    contentCheckOk: true,
+    racyCheckOk: true,
+    ...(sts !== null ? { playbackContext: { contentPlaybackContext: { signatureTimestamp: sts } } } : {}),
+  });
 }

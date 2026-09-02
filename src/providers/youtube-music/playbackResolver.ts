@@ -5,14 +5,28 @@ import type { PlaybackResolution } from "@/lib/contracts/music";
 /**
  * Résolution de flux (plan §12/§13).
  *
- * InnerTube en anonyme (WEB_REMIX et 5 autres contextes testés le
- * 2026-09-01, voir docs/reverse-engineering/youtube-music) est bloqué sans
- * PoToken. Repli sur yt-dlp en subprocess (§105/réflexion d'architecture —
- * réutilisation d'une librairie mature plutôt que réimplémenter un
- * solveur BotGuard, §87.4). Le chemin InnerTube reste tenté en premier et
- * n'est jamais supprimé : si YouTube change de comportement demain (ou
- * qu'un PoTokenManager maison est construit plus tard), ce chemin redevient
- * actif sans rien retoucher côté appelant.
+ * Mise à jour réelle du 2026-09-02 (voir docs/reverse-engineering/youtube-music) :
+ * la conclusion du 2026-09-01 ("PoToken/BotGuard obligatoire, tous contextes
+ * bloqués") était erronée. Avec `playbackContext.contentPlaybackContext.
+ * signatureTimestamp` ajouté (voir innertubeClient.ts), `/player` en anonyme
+ * répond bien `OK` + `streamingData` — sans PoToken, sans cookie, sans
+ * visitorData. Le vrai obstacle restant est ailleurs : chaque format renvoyé
+ * est protégé par `signatureCipher` (déchiffrement de signature lié à
+ * `base.js`, algorithme qui change à chaque déploiement du lecteur YouTube).
+ * Vérifié réel sur un échantillon de morceaux du catalogue YT Music : 100%
+ * des formats (audio et vidéo, adaptatifs et progressifs) portent
+ * `signatureCipher`, aucun `url` en clair — pas un cas particulier à
+ * contourner, une règle systématique observée.
+ *
+ * Décision délibérée : ne PAS réimplémenter ce déchiffrement ici. C'est une
+ * surface de reverse engineering aussi mouvante que BotGuard (code obfusqué
+ * qui change à chaque déploiement), et yt-dlp la maintient déjà pour de vrai
+ * (§87.4 — ne pas réinventer une librairie mature). `tryInnertube` reste donc
+ * tenté en premier (utile si YouTube sert un jour un `url` en clair — ça
+ * arrive pour certains formats hérités) mais, dans l'état actuel constaté,
+ * retombe systématiquement sur le repli yt-dlp, qui gère le déchiffrement.
+ * Le chemin InnerTube n'est jamais supprimé : si YouTube change de
+ * comportement, ce chemin redevient actif sans rien retoucher côté appelant.
  */
 export async function resolveYoutubeMusicPlayback(videoId: string): Promise<PlaybackResolution> {
   const innertubeResult = await tryInnertube(videoId);
@@ -29,7 +43,11 @@ export async function resolveYoutubeMusicPlayback(videoId: string): Promise<Play
   }
 }
 
-/** Renvoie une résolution si InnerTube a réussi, ou `null` pour signaler "tenter le repli yt-dlp". */
+/**
+ * Renvoie une résolution si InnerTube a réussi avec un `url` en clair, ou
+ * `null` pour signaler "tenter le repli yt-dlp" — cas actuel systématique
+ * (`signatureCipher` sans `url`, voir commentaire ci-dessus).
+ */
 async function tryInnertube(videoId: string): Promise<PlaybackResolution | null> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw: any = await innertubePlayer(videoId);

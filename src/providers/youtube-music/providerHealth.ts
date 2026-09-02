@@ -28,7 +28,10 @@ async function probePlayer(): Promise<{ status: ProviderProbeStatus; detail?: st
   // repli yt-dlp) — vidéo de test stable et connue publique.
   try {
     await resolveStreamUrl("jNQXAC9IVRw");
-    return { status: "OK", detail: "via yt-dlp (InnerTube anonyme bloqué, voir docs/reverse-engineering)" };
+    return {
+      status: "OK",
+      detail: "via yt-dlp (InnerTube anonyme atteint OK+streamingData mais formats signatureCipher non déchiffrés ici, voir docs/reverse-engineering)",
+    };
   } catch (err) {
     return { status: "BROKEN", detail: err instanceof Error ? err.message : String(err) };
   }
