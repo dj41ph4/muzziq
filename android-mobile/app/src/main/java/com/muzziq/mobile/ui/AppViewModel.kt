@@ -14,7 +14,11 @@ import com.muzziq.mobile.core.capabilities.CapabilityManager
 import com.muzziq.mobile.core.capabilities.MuzziQCapabilities
 import com.muzziq.mobile.core.capabilities.ServerConnectionState
 import com.muzziq.mobile.data.model.Track
+import com.muzziq.mobile.data.room.MuzziQDatabase
+import com.muzziq.mobile.domain.DownloadRepository
 import com.muzziq.mobile.domain.RoomFavoriteRepository
+import com.muzziq.mobile.domain.ServerDownloadRepository
+import com.muzziq.mobile.domain.StandaloneDownloadRepository
 import com.muzziq.mobile.playback.MusicSourceLocator
 import com.muzziq.mobile.playback.PlayerController
 import com.muzziq.mobile.standalone.MigrationManager
@@ -80,6 +84,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Téléchargements hors-ligne (plan §57) — StandaloneDownloadRepository en standalone
+     * (déjà local par définition), ServerDownloadRepository en mode Lié (rapatrie
+     * réellement les octets). Choisi/instancié dans activateStandalone/activateLinked,
+     * jamais avant qu'une source ne soit active. */
+    private var downloadRepository: DownloadRepository? = null
+    private val _downloadedTrackIds = MutableStateFlow<Set<String>>(emptySet())
+    val downloadedTrackIds: StateFlow<Set<String>> = _downloadedTrackIds.asStateFlow()
+    private val _downloadingTrackIds = MutableStateFlow<Set<String>>(emptySet())
+    val downloadingTrackIds: StateFlow<Set<String>> = _downloadingTrackIds.asStateFlow()
+
+    fun requestDownload(track: Track) {
+        val repo = downloadRepository ?: return
+        if (track.id in _downloadingTrackIds.value) return
+        viewModelScope.launch {
+            _downloadingTrackIds.value = _downloadingTrackIds.value + track.id
+            repo.requestDownload(track).onFailure { _error.value = "Téléchargement échoué : ${it.message}" }
+            _downloadingTrackIds.value = _downloadingTrackIds.value - track.id
+            refreshDownloads()
+        }
+    }
+
+    private fun refreshDownloads() {
+        val repo = downloadRepository ?: return
+        viewModelScope.launch {
+            repo.downloadedTrackIds().onSuccess { _downloadedTrackIds.value = it.toSet() }
+        }
+    }
+
     init {
         StandaloneMusicSourceHolder.instance = standalone
         player.connect()
@@ -139,19 +171,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun activateStandalone() {
         musicSource = standalone
         MusicSourceLocator.set(standalone)
+        downloadRepository = StandaloneDownloadRepository(standalone)
         _state.value = RootUiState.Ready(AppMode.STANDALONE)
         refreshLibrary()
+        refreshDownloads()
         restorePersistedQueue()
     }
 
     private suspend fun activateLinked(url: String) {
         val cookie = prefs.sessionCookie.first()
-        val source = ServerMusicSource(url, cookie)
+        val downloadDao = MuzziQDatabase.get(application).downloadDao()
+        val source = ServerMusicSource(url, cookie, downloadDao)
         musicSource = source
         MusicSourceLocator.set(source)
+        downloadRepository = ServerDownloadRepository(application, source)
         _state.value = RootUiState.Ready(AppMode.LINKED)
         refreshLibrary()
         refreshServerCapabilities(url)
+        refreshDownloads()
         restorePersistedQueue()
     }
 

@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -120,6 +123,9 @@ fun SharedTransitionScope.PlayerScreen(
     onSkipPrevious: () -> Unit,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onToggleDownload: () -> Unit,
 ) {
     val dominant = rememberDominantColor(track.artworkUrl)
     val animatedDominant by animateFloatAsState(targetValue = 1f, animationSpec = tween(600), label = "grad")
@@ -169,6 +175,21 @@ fun SharedTransitionScope.PlayerScreen(
                         contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
                         tint = if (isFavorite) MuzziQColors.Brand else MuzziQColors.TextMuted,
                     )
+                }
+                // Téléchargement hors-ligne (plan §57) — en standalone toujours "déjà
+                // téléchargé" (StandaloneDownloadRepository), en mode Lié rapatrie
+                // réellement les octets (ServerDownloadRepository) puis sert le fichier
+                // local à toute lecture suivante (ServerMusicSource.resolvePlayableUri).
+                IconButton(onClick = onToggleDownload, enabled = !isDownloading) {
+                    if (isDownloading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MuzziQColors.Brand, strokeWidth = 2.dp)
+                    } else {
+                        Icon(
+                            if (isDownloaded) Icons.Rounded.DownloadDone else Icons.Rounded.Download,
+                            contentDescription = if (isDownloaded) "Téléchargé" else "Télécharger",
+                            tint = if (isDownloaded) MuzziQColors.Brand else MuzziQColors.TextMuted,
+                        )
+                    }
                 }
             }
 

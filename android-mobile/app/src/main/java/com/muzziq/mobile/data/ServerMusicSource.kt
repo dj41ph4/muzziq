@@ -2,15 +2,24 @@ package com.muzziq.mobile.data
 
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
+import com.muzziq.mobile.data.room.DownloadDao
+import java.io.File
 
 /**
  * Mode Lié (§56.4, §56) — parle uniquement à l'API MuzziQ, jamais directement à un
  * provider (INTERDIT 10 côté serveur, respecté ici en ne consommant que /api/).
  * Le serveur reste maître du catalogue, de l'identité, des recommandations.
+ *
+ * [downloadDao] optionnel (null par défaut, ne change rien pour les appelants
+ * existants) : quand fourni, un morceau déjà téléchargé (ServerDownloadRepository,
+ * domain/) est servi depuis le disque plutôt que re-résolu en réseau — ordre de
+ * préférence de lecture réel (plan §11 : fichier local avant provider), pas
+ * seulement pour la bibliothèque locale standalone.
  */
 class ServerMusicSource(
     private val baseUrl: String,
     private val cookie: String?,
+    private val downloadDao: DownloadDao? = null,
 ) : MusicSource {
     override val label: String = "Serveur MuzziQ"
     private val api = ApiClientFactory.create(baseUrl)
@@ -56,6 +65,15 @@ class ServerMusicSource(
     override suspend fun resolvePlayableUri(track: Track): Result<String> = runCatching {
         val recordingId = (track.source as? TrackSource.Server)?.recordingId
             ?: error("Source de piste invalide")
+
+        // Ordre de préférence de lecture (plan §11) : fichier déjà téléchargé avant
+        // toute résolution réseau — permet à un morceau serveur téléchargé de rester
+        // lisible même sans connexion, pas juste "marqué téléchargé" sans effet réel.
+        val downloaded = downloadDao?.getForTrack(recordingId)
+        if (downloaded != null) {
+            val file = File(downloaded.localPath)
+            if (file.exists()) return@runCatching file.toURI().toString()
+        }
 
         // Playback Resolver serveur (§12) : le client demande "joue cet id",
         // jamais une URL de provider construite lui-même (§14).

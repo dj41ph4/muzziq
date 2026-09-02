@@ -127,6 +127,11 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads ORDER BY downloadedAt DESC")
     fun observeAll(): Flow<List<DownloadEntity>>
 
+    /** Instantané suspend — pour un appelant qui a juste besoin de la liste une fois
+     * (ex. rafraîchir un StateFlow après une action), pas d'observer en continu. */
+    @Query("SELECT * FROM downloads ORDER BY downloadedAt DESC")
+    suspend fun getAllOnce(): List<DownloadEntity>
+
     @Query("SELECT * FROM downloads WHERE trackId = :trackId")
     suspend fun getForTrack(trackId: String): DownloadEntity?
 
