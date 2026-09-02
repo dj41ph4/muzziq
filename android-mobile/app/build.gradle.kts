@@ -75,6 +75,15 @@ android {
     }
 }
 
+// Room exporte le schéma JSON à chaque compilation (une version par bump de
+// `version` dans MuzziQDatabase) — nécessaire pour que Room valide les
+// migrations à la compilation (testMigration) plutôt que de découvrir un
+// schéma cassé au premier redémarrage d'un vrai appareil.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.generateKotlin", "true")
+}
+
 dependencies {
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.ktx)

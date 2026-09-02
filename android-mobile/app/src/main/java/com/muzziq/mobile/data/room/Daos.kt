@@ -167,3 +167,26 @@ interface RecommendationDao {
     @Query("DELETE FROM recommendations")
     suspend fun clear()
 }
+
+@Dao
+interface LinkedMusicAccountDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(account: LinkedMusicAccountEntity)
+
+    @Query("SELECT * FROM linked_music_accounts ORDER BY connectedAt")
+    fun observeAll(): Flow<List<LinkedMusicAccountEntity>>
+
+    @Query("SELECT * FROM linked_music_accounts ORDER BY connectedAt")
+    suspend fun getAllOnce(): List<LinkedMusicAccountEntity>
+
+    @Query("SELECT * FROM linked_music_accounts WHERE provider = :provider LIMIT 1")
+    suspend fun byProvider(provider: String): LinkedMusicAccountEntity?
+
+    /** Déconnexion (règle absolue du plan : ne supprime que le compte, jamais les données
+     * MuzziQ associées — favoris/playlists/historique/mappings/downloads restent intacts). */
+    @Query("DELETE FROM linked_music_accounts WHERE id = :accountId")
+    suspend fun delete(accountId: String)
+
+    @Query("UPDATE linked_music_accounts SET status = :status, lastSyncAt = :lastSyncAt WHERE id = :accountId")
+    suspend fun updateStatus(accountId: String, status: String, lastSyncAt: Long?)
+}

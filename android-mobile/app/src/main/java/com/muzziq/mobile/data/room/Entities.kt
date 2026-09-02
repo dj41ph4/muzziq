@@ -6,14 +6,15 @@ import androidx.room.PrimaryKey
 
 /**
  * Schéma Room — base de données locale structurée (plan Android, chantier
- * "autonomous-first"). État réel au moment de l'écriture : ce fichier définit
- * le schéma et compile (vérifié seulement par le prochain run CI, aucun SDK
- * Android ici), mais RIEN dans l'app ne l'instancie ni ne le lit encore —
+ * "autonomous-first"). État réel : en production (version 2, exportSchema =
+ * true, voir MuzziQDatabase) pour favoris/playlists/téléchargements
+ * (RoomFavoriteRepository, RoomPlaylistRepository, ServerDownloadRepository).
+ * `artists`/`albums`/`tracks`/`provider_mappings`/`playback_events`/
+ * `recommendations` restent en revanche non alimentées à ce jour —
  * `standalone/LocalTasteDatabase.kt` (SQLiteOpenHelper) reste la seule
  * source réellement active pour la bibliothèque locale et le moteur de goût.
- * La migration (remplacer LocalTasteDatabase par ce schéma, porter les DAOs
- * dans StandaloneMusicSource) est un chantier séparé, pas fait ici — ajout
- * pur, délibérément non branché pour ne rien casser de ce qui fonctionne.
+ * La migration de ces tables-là (remplacer LocalTasteDatabase, porter les
+ * DAOs dans StandaloneMusicSource) reste un chantier séparé, pas fait ici.
  */
 
 @Entity(tableName = "artists")
@@ -140,4 +141,28 @@ data class RecommendationEntity(
     val reason: String,
     val score: Double,
     val generatedAt: Long,
+)
+
+/**
+ * Compte externe lié (YouTube Music / Spotify) — pivot multi-provider cumulatif.
+ * Ajoutée en version 2 (voir MuzziQDatabase.MIGRATION_1_2). AUCUN token/cookie
+ * brut ici : les identifiants réels vivent dans un coffre séparé chiffré
+ * (Android Keystore, `security/CredentialVault.kt` — pas encore écrit, chantier
+ * ultérieur). Cette table ne retient que des métadonnées non sensibles, jamais
+ * de quoi rejouer une session à elle seule.
+ */
+@Entity(tableName = "linked_music_accounts")
+data class LinkedMusicAccountEntity(
+    @PrimaryKey val id: String,
+    /** "SPOTIFY" | "YOUTUBE_MUSIC" — jamais une 3e valeur inventée sans mise à jour de ce commentaire. */
+    val provider: String,
+    val externalUserId: String,
+    val displayName: String? = null,
+    val avatarUrl: String? = null,
+    val isPrimary: Boolean = false,
+    val syncEnabled: Boolean = true,
+    val connectedAt: Long,
+    val lastSyncAt: Long? = null,
+    /** "CONNECTED" | "AUTH_EXPIRED" | "DEGRADED" | "DISCONNECTED" | "ERROR". */
+    val status: String,
 )
