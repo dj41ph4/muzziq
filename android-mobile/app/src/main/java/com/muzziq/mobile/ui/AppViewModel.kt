@@ -26,6 +26,7 @@ import com.muzziq.mobile.domain.ServerPlaylistRepository
 import com.muzziq.mobile.domain.StandaloneDownloadRepository
 import com.muzziq.mobile.playback.MusicSourceLocator
 import com.muzziq.mobile.playback.PlayerController
+import com.muzziq.mobile.playback.PlaylistRepositoryLocator
 import com.muzziq.mobile.standalone.HistoryEntry
 import com.muzziq.mobile.standalone.MigrationManager
 import com.muzziq.mobile.standalone.StandaloneMusicSource
@@ -287,7 +288,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         musicSource = standalone
         MusicSourceLocator.set(standalone)
         downloadRepository = StandaloneDownloadRepository(standalone)
-        playlistRepository = RoomPlaylistRepository(appContext)
+        playlistRepository = RoomPlaylistRepository(appContext).also { PlaylistRepositoryLocator.set(it) }
         _homeRows.value = emptyList()
         _state.value = RootUiState.Ready(AppMode.STANDALONE)
         refreshLibrary()
@@ -304,7 +305,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         musicSource = source
         MusicSourceLocator.set(source)
         downloadRepository = ServerDownloadRepository(appContext, source)
-        playlistRepository = ServerPlaylistRepository(url, cookie)
+        playlistRepository = ServerPlaylistRepository(url, cookie).also { PlaylistRepositoryLocator.set(it) }
         _state.value = RootUiState.Ready(AppMode.LINKED)
         refreshLibrary()
         refreshServerCapabilities(url)

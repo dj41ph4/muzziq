@@ -22,6 +22,7 @@ import com.muzziq.mobile.data.MusicSource
 import com.muzziq.mobile.data.QueueStateStore
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
+import com.muzziq.mobile.domain.PlaylistSummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,6 +53,12 @@ class PlaybackService : MediaLibraryService() {
     private var queueIndex: Int = -1
     private var queueSource: MusicSource? = null
     private val queueStateStore by lazy { QueueStateStore(this) }
+
+    // Rempli à chaque construction d'item navigable (onGetChildren) — consulté par
+    // onAddMediaItems() pour résoudre l'URI de lecture réelle au moment où l'utilisateur
+    // tape un élément dans Android Auto (§56.2). Les items renvoyés par onGetChildren
+    // n'ont jamais d'URI directement jouable, la résolution reste paresseuse (§12).
+    private val browseTrackCache = mutableMapOf<String, Track>()
 
     override fun onCreate() {
         super.onCreate()
@@ -190,10 +197,11 @@ class PlaybackService : MediaLibraryService() {
     }
 
     /**
-     * Arborescence Android Auto (§56.2) : "Bibliothèque" à plat en V1 — même source
-     * de données (MusicSource actif) que le mobile, aucune logique de lecture
-     * dupliquée. La recherche vocale route vers MusicSource.search(), résolue
-     * ensuite par playTrack() exactement comme une recherche manuelle.
+     * Arborescence Android Auto (§56.2) : Bibliothèque, Playlists, Historique — même
+     * structure logique que les onglets mobiles, mêmes sources de données (MusicSource
+     * actif, PlaylistRepositoryLocator, StandaloneMusicSourceHolder), aucune logique de
+     * lecture dupliquée. La recherche vocale route vers MusicSource.search(), résolue
+     * ensuite par onAddMediaItems() exactement comme un item de la bibliothèque tapé.
      */
     private inner class LibraryCallback : MediaLibrarySession.Callback {
         override fun onGetLibraryRoot(
@@ -222,9 +230,31 @@ class PlaybackService : MediaLibraryService() {
             pageSize: Int,
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = scope.future {
-            val source = MusicSourceLocator.source.value
-            val tracks = source?.library()?.getOrNull().orEmpty()
-            LibraryResult.ofItemList(ImmutableList.copyOf(tracks.map { it.toBrowsableMediaItem() }), params)
+            val items = when {
+                parentId == ROOT_ID -> listOf(
+                    categoryItem(LIBRARY_ID, "Bibliothèque"),
+                    categoryItem(PLAYLISTS_ID, "Playlists"),
+                    categoryItem(HISTORY_ID, "Historique"),
+                )
+                parentId == LIBRARY_ID -> {
+                    val source = MusicSourceLocator.source.value
+                    source?.library()?.getOrNull().orEmpty().map { it.toBrowsableMediaItem() }
+                }
+                parentId == PLAYLISTS_ID -> {
+                    val repo = PlaylistRepositoryLocator.repository.value
+                    repo?.playlists()?.getOrNull().orEmpty().map { it.toBrowsableMediaItem() }
+                }
+                parentId == HISTORY_ID -> {
+                    StandaloneMusicSourceHolder.instance?.recentHistory()?.map { it.track.toBrowsableMediaItem() }.orEmpty()
+                }
+                parentId.startsWith(PLAYLIST_PREFIX) -> {
+                    val playlistId = parentId.removePrefix(PLAYLIST_PREFIX)
+                    val repo = PlaylistRepositoryLocator.repository.value
+                    repo?.playlistTracks(playlistId)?.getOrNull().orEmpty().map { it.toBrowsableMediaItem() }
+                }
+                else -> emptyList()
+            }
+            LibraryResult.ofItemList(ImmutableList.copyOf(items), params)
         }
 
         override fun onSearch(
@@ -251,23 +281,79 @@ class PlaybackService : MediaLibraryService() {
             val tracks = source?.search(query)?.getOrNull().orEmpty()
             LibraryResult.ofItemList(ImmutableList.copyOf(tracks.map { it.toBrowsableMediaItem() }), params)
         }
+
+        /** Résout l'URI de lecture réelle au moment où l'utilisateur tape un item navigable
+         * (Android Auto, ou tout MediaController externe) — les items d'onGetChildren
+         * n'ont jamais d'URI directement jouable (résolution paresseuse, §12). Item non
+         * retrouvé dans le cache (session recréée entre le browse et le tap) : renvoyé
+         * inchangé plutôt qu'une exception, ExoPlayer échouera proprement sur l'URI vide. */
+        override fun onAddMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+        ): ListenableFuture<MutableList<MediaItem>> = scope.future {
+            val source = MusicSourceLocator.source.value
+            mediaItems.map { item ->
+                val track = browseTrackCache[item.mediaId]
+                val url = if (track != null && source != null) source.resolvePlayableUri(track).getOrNull() else null
+                if (track != null && url != null) {
+                    queue = listOf(track)
+                    queueIndex = 0
+                    queueSource = source
+                    currentTrack = track
+                    item.buildUpon().setUri(url).setMediaId(track.id).build()
+                } else {
+                    item
+                }
+            }.toMutableList()
+        }
     }
 
-    private fun Track.toBrowsableMediaItem(): MediaItem = MediaItem.Builder()
+    private fun categoryItem(id: String, title: String): MediaItem = MediaItem.Builder()
         .setMediaId(id)
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(title)
-                .setArtist(artist)
-                .setAlbumTitle(album)
-                .setArtworkUri(artworkUrl?.let { android.net.Uri.parse(it) })
-                .setIsBrowsable(false)
-                .setIsPlayable(true)
+                .setIsBrowsable(true)
+                .setIsPlayable(false)
                 .build()
         )
         .build()
 
+    private fun PlaylistSummary.toBrowsableMediaItem(): MediaItem = MediaItem.Builder()
+        .setMediaId("$PLAYLIST_PREFIX$id")
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(name)
+                .setSubtitle("$itemCount morceau(x)")
+                .setIsBrowsable(true)
+                .setIsPlayable(false)
+                .build()
+        )
+        .build()
+
+    private fun Track.toBrowsableMediaItem(): MediaItem {
+        browseTrackCache[id] = this
+        return MediaItem.Builder()
+            .setMediaId(id)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setArtist(artist)
+                    .setAlbumTitle(album)
+                    .setArtworkUri(artworkUrl?.let { android.net.Uri.parse(it) })
+                    .setIsBrowsable(false)
+                    .setIsPlayable(true)
+                    .build()
+            )
+            .build()
+    }
+
     companion object {
         const val ROOT_ID = "muzziq_root"
+        const val LIBRARY_ID = "muzziq_library"
+        const val PLAYLISTS_ID = "muzziq_playlists"
+        const val HISTORY_ID = "muzziq_history"
+        const val PLAYLIST_PREFIX = "muzziq_playlist:"
     }
 }
