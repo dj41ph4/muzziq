@@ -58,6 +58,15 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      # Seule vraie vérification disponible pour le code de domaine (ProviderRegistry,
+      # etc.) : aucun SDK/émulateur Android dans l'environnement de développement de ce
+      # dépôt, donc ces tests JVM purs (app/src/test/) ne tournent jamais qu'ici. Ne pas
+      # supprimer/contourner cette étape pour "aller plus vite" — c'est la seule certitude
+      # réelle qu'on ait sur ce code avant qu'un appareil physique ne l'exécute.
+      - name: Tests unitaires JVM (domain/, voir app/src/test/)
+        working-directory: android-mobile
+        run: gradle testDebugUnitTest --no-daemon
+
       - name: Préparation de la clé de signature release
         env:
           ANDROID_KEYSTORE_B64: ${{ secrets.MUZZIQ_ANDROID_KEYSTORE_B64 }}

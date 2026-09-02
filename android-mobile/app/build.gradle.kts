@@ -144,5 +144,6 @@ dependencies {
     implementation(libs.guava)
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
