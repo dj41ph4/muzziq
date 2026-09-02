@@ -36,15 +36,15 @@ ENV NODE_ENV=production \
     MUZZIQ_MUSIC_DIR=/music
 
 RUN addgroup -g 1001 muzziq && adduser -u 1001 -G muzziq -S muzziq
-RUN apk add --no-cache su-exec curl ca-certificates
 # yt-dlp : résout les flux audio YouTube Music quand InnerTube anonyme est
-# bloqué (voir docs/reverse-engineering/youtube-music/). Binaire standalone
-# officiel (PyInstaller — aucune dépendance Python requise à l'exécution),
-# jamais aria2 (INTERDIT 9). Bug réel trouvé en usage : l'image ne
-# l'installait pas du tout ("spawn yt-dlp ENOENT" en conditions réelles).
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux -o /usr/local/bin/yt-dlp \
-    && chmod +x /usr/local/bin/yt-dlp \
-    && /usr/local/bin/yt-dlp --version
+# bloqué (voir docs/reverse-engineering/youtube-music/). Jamais aria2
+# (INTERDIT 9). Bug réel #1 : l'image ne l'installait pas du tout ("spawn
+# yt-dlp ENOENT" en conditions réelles). Bug réel #2 : le binaire standalone
+# officiel (PyInstaller) est lié à glibc — sur Alpine (musl), il échoue avec
+# "not found" (exit 127), pas une erreur claire. Fixé en utilisant le paquet
+# yt-dlp du dépôt Alpine (musl-natif, tire python3 en dépendance).
+RUN apk add --no-cache su-exec ca-certificates yt-dlp \
+    && yt-dlp --version
 
 COPY --from=builder --chown=muzziq:muzziq /app/.next/standalone ./
 COPY --from=builder --chown=muzziq:muzziq /app/.next/static ./.next/static
