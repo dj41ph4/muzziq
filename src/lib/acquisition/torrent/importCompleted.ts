@@ -13,7 +13,7 @@ import { importMusicFromDownload } from "@/lib/acquisition/musicImportPipeline";
  * Si un dossier musique est configuré (Settings.musicDir), le Music Import
  * Pipeline (tags, organisation Artiste/Album, rescan — §28) prend le relais
  * immédiatement. Sinon, dégrade proprement : les fichiers restent en
- * staging, récupérables manuellement (plan §2 — MUZZIK ne doit jamais
+ * staging, récupérables manuellement (plan §2 — MuzziQ ne doit jamais
  * bloquer sur une config absente).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

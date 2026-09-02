@@ -1,15 +1,15 @@
 {
-  "name": "muzzik",
+  "name": "muzziq",
   "version": "0.2.1",
   "private": true,
-  "description": "MUZZIK — plateforme musicale personnelle : catalogue unifié, lecture instantanée (YouTube Music), bibliothèque locale, acquisition automatisée.",
+  "description": "MuzziQ — plateforme musicale personnelle : catalogue unifié, lecture instantanée (YouTube Music), bibliothèque locale, acquisition automatisée.",
   "scripts": {
     "dev": "next dev -p 9910",
     "build": "next build",
     "start": "next start -p 9910",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-transform-types --no-warnings --import ./scripts/muzzik-test-loader.mjs --test \"scripts/*.test.ts\""
+    "test": "node --experimental-transform-types --no-warnings --import ./scripts/muzziq-test-loader.mjs --test \"scripts/*.test.ts\""
   },
   "dependencies": {
     "clsx": "^2.1.1",

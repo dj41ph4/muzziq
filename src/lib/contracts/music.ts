@@ -1,11 +1,11 @@
 /**
  * Contrats partagés entre providers, API et frontend (plan d'architecture §64).
  * Types "externes" — ce qu'un provider renvoie AVANT passage par l'IdentityResolver.
- * Ne jamais utiliser ces types comme identité canonique MUZZIK (INTERDIT 2).
+ * Ne jamais utiliser ces types comme identité canonique MuzziQ (INTERDIT 2).
  */
 
 export interface ExternalTrack {
-  /** ID interne au provider (ex. videoId YouTube) — jamais utilisé comme ID MUZZIK. */
+  /** ID interne au provider (ex. videoId YouTube) — jamais utilisé comme ID MuzziQ. */
   providerTrackId: string;
   provider: string;
   title: string;

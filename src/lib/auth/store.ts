@@ -6,7 +6,7 @@ import { DATA_DIR } from "@/lib/config";
 import type { User } from "./types";
 import { SESSION_SECRET_ENV } from "./constants";
 
-/** Store utilisateurs + sessions (porté depuis Movviz src/lib/auth/store.ts, sans l'event bus qui n'existe pas encore côté MUZZIK). */
+/** Store utilisateurs + sessions (porté depuis Movviz src/lib/auth/store.ts, sans l'event bus qui n'existe pas encore côté MuzziQ). */
 
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");

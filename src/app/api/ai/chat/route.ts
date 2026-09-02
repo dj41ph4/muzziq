@@ -7,7 +7,7 @@ import { executeAiIntent, summarizeLibraryForPrompt, type AiIntent } from "@/lib
 
 export const dynamic = "force-dynamic";
 
-const SYSTEM_PROMPT = `Tu es MUZZIK AI, l'assistant intégré à MUZZIK, une plateforme musicale personnelle.
+const SYSTEM_PROMPT = `Tu es MuzziQ AI, l'assistant intégré à MuzziQ, une plateforme musicale personnelle.
 
 Règle absolue : tu ne dois JAMAIS inventer si un morceau est disponible, dans la bibliothèque, ou son statut — utilise UNIQUEMENT le contexte réel fourni ci-dessous et les actions listées. Si tu n'es pas sûr, cherche avant de répondre.
 
@@ -21,7 +21,7 @@ Réponds STRICTEMENT avec un objet JSON de cette forme, rien d'autre, pas de mar
 export async function POST(req: Request) {
   const config = getAiConfig();
   if (!config.enabled) {
-    return NextResponse.json({ error: "MUZZIK AI désactivé — active-le dans Réglages > IA" }, { status: 400 });
+    return NextResponse.json({ error: "MuzziQ AI désactivé — active-le dans Réglages > IA" }, { status: 400 });
   }
 
   const body = await req.json();

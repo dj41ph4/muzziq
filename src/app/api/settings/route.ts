@@ -12,7 +12,7 @@ export async function GET() {
 /**
  * Admin uniquement — mais seulement une fois qu'un compte a été créé
  * (hasAnyUser()). Tant que l'auth n'est pas configurée (aucun compte),
- * MUZZIK reste utilisable sans login (plan §2 — jamais bloquant sur une
+ * MuzziQ reste utilisable sans login (plan §2 — jamais bloquant sur une
  * config absente) ; dès qu'un premier compte existe, les réglages serveur
  * exigent d'être connecté en admin.
  */

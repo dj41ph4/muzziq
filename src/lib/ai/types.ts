@@ -1,5 +1,5 @@
 /**
- * Config IA multi-fournisseur (plan §45, MUZZIK AI = équivalent Movviz AI).
+ * Config IA multi-fournisseur (plan §45, MuzziQ AI = équivalent Movviz AI).
  * Porté directement depuis Movviz (src/lib/ai/types.ts + providers.ts) —
  * même logique de rotation de clés + repli entre fournisseurs, même choix
  * de fournisseurs (tous avec un palier gratuit exploitable). Invisible tant

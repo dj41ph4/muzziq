@@ -75,8 +75,8 @@ export async function buildUnifiedUserContextSnapshot(userId: string): Promise<U
 
 /**
  * Formate le snapshot en une chaîne compacte injectable dans le prompt
- * système de MUZZIK AI (plan §45 — "avant de dire qu'un morceau n'est pas
- * disponible, l'IA doit interroger MUZZIK") : jamais halluciné, toujours
+ * système de MuzziQ AI (plan §45 — "avant de dire qu'un morceau n'est pas
+ * disponible, l'IA doit interroger MuzziQ") : jamais halluciné, toujours
  * dérivé du ledger réel.
  */
 export function formatUnifiedUserContext(snapshot: UnifiedUserContextSnapshot): string {

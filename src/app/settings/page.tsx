@@ -3,7 +3,7 @@ import { Sparkles, Rss, Server, ChevronRight } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 
 const ENTRIES = [
-  { href: "/settings/ai", label: "MUZZIK AI", desc: "Fournisseurs, clés API", Icon: Sparkles },
+  { href: "/settings/ai", label: "MuzziQ AI", desc: "Fournisseurs, clés API", Icon: Sparkles },
   { href: "/settings/indexers", label: "Indexers", desc: "Sources d'acquisition torrent", Icon: Rss },
   { href: "/settings/plex", label: "Plex", desc: "Intégration optionnelle", Icon: Server },
 ];

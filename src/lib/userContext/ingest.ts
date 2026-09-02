@@ -112,7 +112,7 @@ export async function recordPlaybackStartedContext(input: {
   await recordUserContextEvent({
     userId: input.userId,
     eventType: "PLAY_START",
-    source: "muzzik_playback",
+    source: "muzziq_playback",
     recordingId: input.recordingId,
     artist: input.artist,
     title: input.title,

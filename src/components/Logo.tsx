@@ -4,9 +4,9 @@ import { motion } from "framer-motion";
 import { Music2 } from "lucide-react";
 
 /**
- * Marque MUZZIK — même traitement que l'AnimatedLogo Movviz (orbite de
+ * Marque MuzziQ — même traitement que l'AnimatedLogo Movviz (orbite de
  * particules, anneaux ripple, halo, respiration), transposé en vert
- * (identité MUZZIK) avec une note de musique au lieu du clap de cinéma.
+ * (identité MuzziQ) avec une note de musique au lieu du clap de cinéma.
  * Réutilisation directe du mécanisme, pas du contenu (§1.1 du plan).
  */
 

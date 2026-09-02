@@ -68,7 +68,7 @@ export default function AssistantPage() {
             </div>
           </div>
         ))}
-        {sending && <p className="text-xs text-[var(--ink-dim)]">MUZZIK AI réfléchit…</p>}
+        {sending && <p className="text-xs text-[var(--ink-dim)]">MuzziQ AI réfléchit…</p>}
       </div>
 
       <form

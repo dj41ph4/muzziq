@@ -10,7 +10,7 @@ export default function Home() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-6 px-6 text-center">
-      <h1 className="text-4xl font-bold tracking-tight">MUZZIK</h1>
+      <h1 className="text-4xl font-bold tracking-tight">MuzziQ</h1>
       <p className="text-[var(--ink-soft)]">
         Fondation Phase A — boot, settings, health. Aucun provider branché pour l&apos;instant.
       </p>
@@ -20,7 +20,7 @@ export default function Home() {
           <span
             className={`h-2 w-2 rounded-full ${health?.status === "ok" ? "bg-[var(--brand)]" : "bg-zinc-600"}`}
           />
-          <span className="font-semibold">{settings?.serverName ?? "MUZZIK"}</span>
+          <span className="font-semibold">{settings?.serverName ?? "MuzziQ"}</span>
           <span className="text-[var(--ink-dim)]">v{health?.version ?? "…"}</span>
         </div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[var(--ink-soft)]">

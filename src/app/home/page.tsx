@@ -73,7 +73,7 @@ export default function HomePage() {
       <header className="float-in flex items-center gap-4">
         <Logo size="lg" />
         <div>
-          <p className="text-sm font-medium text-[var(--ink-dim)]">MUZZIK</p>
+          <p className="text-sm font-medium text-[var(--ink-dim)]">MuzziQ</p>
           <h1 className="mt-0.5 text-4xl font-extrabold tracking-tight sm:text-5xl">{greeting()}</h1>
         </div>
       </header>
@@ -84,7 +84,7 @@ export default function HomePage() {
         <div className="glass float-in flex flex-col items-center gap-3 rounded-2xl px-8 py-16 text-center">
           <Music2 size={32} className="text-[var(--ink-dim)]" />
           <p className="max-w-xs text-sm text-[var(--ink-soft)]">
-            Rien à montrer pour l&apos;instant — cherche et joue quelques morceaux pour que MUZZIK apprenne tes goûts.
+            Rien à montrer pour l&apos;instant — cherche et joue quelques morceaux pour que MuzziQ apprenne tes goûts.
           </p>
         </div>
       )}

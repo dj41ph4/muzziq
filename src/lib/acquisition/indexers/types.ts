@@ -1,5 +1,5 @@
 /**
- * Indexer natif MUZZIK (plan §23) — parle Torznab, le protocole standard
+ * Indexer natif MuzziQ (plan §23) — parle Torznab, le protocole standard
  * exposé par la quasi-totalité des indexers torrent. Réimplémentation
  * indépendante inspirée du client Torznab de Movviz (protocole générique,
  * pas de logique cinéma portée — le scoring musical est déjà couvert par

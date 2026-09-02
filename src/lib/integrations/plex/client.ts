@@ -2,7 +2,7 @@ import { safePlexUrl } from "./safeUrl";
 import type { PlexConfig } from "./store";
 
 /**
- * Client Plex minimal (plan §53) — jamais un identifiant MUZZIK canonique
+ * Client Plex minimal (plan §53) — jamais un identifiant MuzziQ canonique
  * dérivé d'un ratingKey (INTERDIT 2). Utilisé uniquement pour découvrir/
  * mapper une bibliothèque Plex existante, jamais comme dépendance de lecture.
  */

@@ -12,7 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "MUZZIK",
+  title: "MuzziQ",
   description: "Plateforme musicale personnelle — catalogue unifié, lecture instantanée, bibliothèque locale.",
 };
 

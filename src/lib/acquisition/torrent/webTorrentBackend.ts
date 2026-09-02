@@ -8,7 +8,7 @@ import { DATA_DIR } from "@/lib/config";
  * API WebTorrent v2 réelle (options client.add, gestion du port, la
  * particularité "pause() n'arrête pas les pairs, seul remove() le fait"),
  * mais sans la logique de correspondance épisode/saison (spécifique vidéo,
- * MUZZIK n'en a pas besoin — l'import musical est géré séparément).
+ * MuzziQ n'en a pas besoin — l'import musical est géré séparément).
  *
  * Pas aria2 (INTERDIT 9). Process actuel : tourne dans le process Next.js
  * plutôt qu'un `engine/` séparé comme Movviz — simplification délibérée pour
@@ -50,13 +50,13 @@ interface TorrentMeta {
 }
 
 const g = globalThis as typeof globalThis & {
-  __muzzikWtClient?: WTClient | null;
-  __muzzikWtClientPromise?: Promise<WTClient>;
-  __muzzikWtMeta?: Map<string, TorrentMeta>;
+  __muzziqWtClient?: WTClient | null;
+  __muzziqWtClientPromise?: Promise<WTClient>;
+  __muzziqWtMeta?: Map<string, TorrentMeta>;
 };
 
 function metaMap(): Map<string, TorrentMeta> {
-  return (g.__muzzikWtMeta ??= new Map());
+  return (g.__muzziqWtMeta ??= new Map());
 }
 
 async function createClient(): Promise<WTClient> {
@@ -78,13 +78,13 @@ async function createClient(): Promise<WTClient> {
 }
 
 async function getClient(): Promise<WTClient> {
-  if (g.__muzzikWtClient) return g.__muzzikWtClient;
-  if (g.__muzzikWtClientPromise) return g.__muzzikWtClientPromise;
-  g.__muzzikWtClientPromise = createClient().then((c) => {
-    g.__muzzikWtClient = c;
+  if (g.__muzziqWtClient) return g.__muzziqWtClient;
+  if (g.__muzziqWtClientPromise) return g.__muzziqWtClientPromise;
+  g.__muzziqWtClientPromise = createClient().then((c) => {
+    g.__muzziqWtClient = c;
     return c;
   });
-  return g.__muzzikWtClientPromise;
+  return g.__muzziqWtClientPromise;
 }
 
 function summarize(t: WTTorrent): TorrentSummary {

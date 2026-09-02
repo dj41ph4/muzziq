@@ -1,6 +1,6 @@
 services:
-  muzzik:
-    container_name: muzzik
+  muzziq:
+    container_name: muzziq
     build:
       context: ../..
       dockerfile: packaging/docker/Dockerfile

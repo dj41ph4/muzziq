@@ -16,7 +16,7 @@ export async function GET() {
 }
 
 /**
- * Un PLAY_START doit exister dans le catalogue MUZZIK même si l'utilisateur
+ * Un PLAY_START doit exister dans le catalogue MuzziQ même si l'utilisateur
  * n'a jamais cliqué "+ Bibliothèque" (plan §17 — catalogue ≠ bibliothèque) :
  * on résout/crée le Recording à la volée avec le même helper que l'ajout
  * explicite, sans jamais créer de LibraryItem depuis ce endpoint.
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const event = recordEvent({ recordingId: recording.id, type: body.type, source: body.source });
 
   // Additif — jamais bloquant : le Context Engine SQLite (plan §45, porté de
-  // Movviz) alimente le contexte MUZZIK AI en plus du store JSON existant,
+  // Movviz) alimente le contexte MuzziQ AI en plus du store JSON existant,
   // jamais à sa place. Une DB indisponible/désactivée ne doit jamais casser
   // la lecture (withUserContextDb dégrade déjà en no-op silencieux).
   if (body.type === "PLAY_START") {

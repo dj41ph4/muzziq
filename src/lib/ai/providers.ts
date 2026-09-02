@@ -117,7 +117,7 @@ async function callProvider(
       const headers: Record<string, string> = {
         "content-type": "application/json",
         authorization: `Bearer ${key}`,
-        ...(providerId === "openrouter" ? { "X-Title": "MUZZIK" } : {}),
+        ...(providerId === "openrouter" ? { "X-Title": "MuzziQ" } : {}),
       };
       return await callWithKey(providerId, url, headers, {
         model,

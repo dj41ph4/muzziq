@@ -3,7 +3,7 @@ import { readJsonCached, writeJsonCached } from "@/lib/fsJsonCache";
 
 /**
  * provider_mappings (plan §67) : permet de changer/ajouter un provider sans
- * jamais toucher aux IDs MUZZIK. Un videoId YouTube ne devient JAMAIS un ID
+ * jamais toucher aux IDs MuzziQ. Un videoId YouTube ne devient JAMAIS un ID
  * canonique — il vit uniquement ici (INTERDIT 2).
  */
 

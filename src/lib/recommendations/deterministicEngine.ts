@@ -43,7 +43,7 @@ export function getRecentlyAdded(limit = 10): Recording[] {
 /**
  * "Parce que vous aimez X" (§46) — règle simple et explicable : l'artiste le
  * plus écouté récemment, puis d'autres morceaux du même artiste déjà connus
- * de MUZZIK (catalogue) mais pas dans les derniers écoutés. Pas de similarité
+ * de MuzziQ (catalogue) mais pas dans les derniers écoutés. Pas de similarité
  * inter-artiste ni de scoring de goût (§43 UserTaste) tant que le volume réel
  * de données ne le justifie pas — resterait un chiffre inventé sur un
  * historique quasi vide.
@@ -54,7 +54,7 @@ export async function getBecauseYouLike(limit = 10): Promise<{ artist: string; r
   // Priorité au Context Engine SQL (plan §45, affinité pondérée par
   // confiance — un skip peut faire redescendre un artiste, pas juste
   // compter des lectures brutes) ; repli sur le comptage JSON si la DB
-  // contexte est indisponible/désactivée (MUZZIK_CONTEXT_ENGINE_DISABLED)
+  // contexte est indisponible/désactivée (MUZZIQ_CONTEXT_ENGINE_DISABLED)
   // ou encore vide (tout juste démarré, aucune preuve accumulée).
   const topAffinities = await getTopArtistAffinities(DEFAULT_USER_ID, 1);
   let topArtist = topAffinities[0]?.artist;

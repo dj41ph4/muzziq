@@ -4,10 +4,10 @@ import { addLibraryItem } from "@/lib/library/libraryItemsStore";
 import { listRecordings } from "@/lib/library/recordingsStore";
 
 /**
- * Action Engine MUZZIK AI (plan §45). L'IA ne fabrique jamais un résultat —
+ * Action Engine MuzziQ AI (plan §45). L'IA ne fabrique jamais un résultat —
  * elle ne fait que demander une action, exécutée ici contre les vraies
- * fonctions MUZZIK ; le modèle ne voit que le résultat réel. "Avant de dire
- * qu'un morceau n'est pas disponible, l'IA doit interroger MUZZIK" — c'est
+ * fonctions MuzziQ ; le modèle ne voit que le résultat réel. "Avant de dire
+ * qu'un morceau n'est pas disponible, l'IA doit interroger MuzziQ" — c'est
  * exactement le rôle de ce module : jamais de réponse inventée sur l'état
  * du catalogue/de la bibliothèque.
  */

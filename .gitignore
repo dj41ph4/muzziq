@@ -4,8 +4,8 @@
 /resolver/node_modules
 
 # runtime data — never committed (real music library / config / secrets)
-/.muzzik-data
-/engine/.muzzik-data
+/.muzziq-data
+/engine/.muzziq-data
 
 # next.js
 /.next/

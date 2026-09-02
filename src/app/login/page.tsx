@@ -40,7 +40,7 @@ export default function LoginPage() {
     <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center gap-6 px-6">
       <Logo size="lg" />
       <div className="text-center">
-        <h1 className="text-2xl font-extrabold tracking-tight">{data.setupRequired ? "Configurer MUZZIK" : "Connexion"}</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight">{data.setupRequired ? "Configurer MuzziQ" : "Connexion"}</h1>
         <p className="mt-1 text-sm text-[var(--ink-soft)]">
           {data.setupRequired ? "Crée le compte administrateur." : "Content de te revoir."}
         </p>

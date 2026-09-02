@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 /**
- * Process-wide cache for the JSON files that back every MUZZIK store.
+ * Process-wide cache for the JSON files that back every MuzziQ store.
  *
  * Ported from Movviz (`src/lib/fsJsonCache.ts`) — same author, same problem
  * class (a file-backed JSON store re-read/re-parsed on every API call stalls
@@ -22,7 +22,7 @@ import path from "node:path";
  * pre-build complexity before a real volume need exists): the worker_threads
  * offload Movviz added once a store crossed ~1MB and stringify started
  * blocking the main thread for tens of ms. Add it here the same way, if and
- * when a MUZZIK store actually gets that large.
+ * when a MuzziQ store actually gets that large.
  */
 
 interface CacheEntry {
@@ -34,21 +34,21 @@ interface CacheEntry {
 }
 
 const g = globalThis as typeof globalThis & {
-  __muzzikFsJsonCache?: Map<string, CacheEntry>;
-  __muzzikMemoCache?: Map<string, { version: string; value: unknown }>;
-  __muzzikPendingWrites?: Map<string, { value: unknown; timer: ReturnType<typeof setTimeout> }>;
-  __muzzikWriteInFlight?: Map<string, boolean>;
-  __muzzikPendingFileWrites?: Map<string, unknown>;
-  __muzzikJsonReadFailures?: Set<string>;
+  __muzziqFsJsonCache?: Map<string, CacheEntry>;
+  __muzziqMemoCache?: Map<string, { version: string; value: unknown }>;
+  __muzziqPendingWrites?: Map<string, { value: unknown; timer: ReturnType<typeof setTimeout> }>;
+  __muzziqWriteInFlight?: Map<string, boolean>;
+  __muzziqPendingFileWrites?: Map<string, unknown>;
+  __muzziqJsonReadFailures?: Set<string>;
 };
 
-const cache: Map<string, CacheEntry> = (g.__muzzikFsJsonCache ??= new Map());
-const memoCache: Map<string, { version: string; value: unknown }> = (g.__muzzikMemoCache ??= new Map());
+const cache: Map<string, CacheEntry> = (g.__muzziqFsJsonCache ??= new Map());
+const memoCache: Map<string, { version: string; value: unknown }> = (g.__muzziqMemoCache ??= new Map());
 const pendingWrites: Map<string, { value: unknown; timer: ReturnType<typeof setTimeout> }> =
-  (g.__muzzikPendingWrites ??= new Map());
-const writeInFlight: Map<string, boolean> = (g.__muzzikWriteInFlight ??= new Map());
-const pendingFileWrites: Map<string, unknown> = (g.__muzzikPendingFileWrites ??= new Map());
-const readFailures: Set<string> = (g.__muzzikJsonReadFailures ??= new Set());
+  (g.__muzziqPendingWrites ??= new Map());
+const writeInFlight: Map<string, boolean> = (g.__muzziqWriteInFlight ??= new Map());
+const pendingFileWrites: Map<string, unknown> = (g.__muzziqPendingFileWrites ??= new Map());
+const readFailures: Set<string> = (g.__muzziqJsonReadFailures ??= new Set());
 
 const WRITE_COALESCE_MS = 300;
 
@@ -126,7 +126,7 @@ function startFileWrite(file: string, val: unknown) {
 
   // Bug réel trouvé en test (2026-09-01) : le premier write d'un store
   // JAMAIS écrit avant échouait silencieusement (ENOENT, avalé par le
-  // .catch plus bas) parce que le dossier .muzzik-data n'existe pas encore.
+  // .catch plus bas) parce que le dossier .muzziq-data n'existe pas encore.
   // Les lectures suivantes semblaient marcher (servies par le cache mémoire
   // `pending`), masquant totalement l'échec — rien n'était jamais persisté
   // sur disque. mkdir recursive avant chaque write neutralise la classe

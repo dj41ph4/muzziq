@@ -5,7 +5,7 @@ import type { User } from "./types";
 /**
  * Garde de session — porté depuis Movviz src/lib/auth/guard.ts, simplifié
  * (pas de token API bearer, pas de suivi d'activité — pas encore construits
- * côté MUZZIK, ajoutables plus tard sans changer cette signature).
+ * côté MuzziQ, ajoutables plus tard sans changer cette signature).
  */
 export function requireUser(req: NextRequest): User | null {
   return getCurrentUser(req);

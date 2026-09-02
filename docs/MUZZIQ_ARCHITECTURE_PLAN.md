@@ -1,14 +1,14 @@
-# MUZZIK — Architecture cible
+# MuzziQ — Architecture cible
 
 > **Statut :** document d’architecture initial  
-> **Nom de travail :** MUZZIK  
+> **Nom de travail :** MuzziQ  
 > **Objectif :** construire une plateforme musicale personnelle qui mélange l’immédiateté de MetroList, la qualité d’expérience de Plexamp et la logique d’automatisation de Movviz, sans placer Plex, YouTube Music, Lidarr ou un autre service externe au cœur du système.
 
 ---
 
 ## 0. Décision fondatrice
 
-MUZZIK n’est **pas** :
+MuzziQ n’est **pas** :
 
 - un fork de MetroList ;
 - un skin de YouTube Music ;
@@ -17,7 +17,7 @@ MUZZIK n’est **pas** :
 - un simple lecteur de fichiers locaux ;
 - un assemblage de plusieurs applications externes.
 
-MUZZIK est **le système maître**.
+MuzziQ est **le système maître**.
 
 Il possède lui-même :
 
@@ -53,13 +53,13 @@ ListenBrainz ──┤
 Torrent/indexer┤
                ▼
         ┌───────────────┐
-        │  MUZZIK CORE  │
+        │  MuzziQ CORE  │
         └───────────────┘
                │
        source de vérité
 ```
 
-La suppression d’une intégration ne doit jamais rendre MUZZIK inutilisable.
+La suppression d’une intégration ne doit jamais rendre MuzziQ inutilisable.
 
 ---
 
@@ -67,11 +67,11 @@ La suppression d’une intégration ne doit jamais rendre MUZZIK inutilisable.
 
 ## 1.1 Movviz
 
-Movviz appartient au même auteur que MUZZIK.
+Movviz appartient au même auteur que MuzziQ.
 
 La réutilisation directe est donc autorisée et souhaitée lorsque le code est pertinent.
 
-MUZZIK doit reprendre ou adapter autant que possible :
+MuzziQ doit reprendre ou adapter autant que possible :
 
 - architecture générale backend/frontend ;
 - gestion de configuration ;
@@ -100,7 +100,7 @@ MUZZIK doit reprendre ou adapter autant que possible :
 - gestion des fallbacks ;
 - principes de non-régression.
 
-Le dépôt Movviz actuel possède déjà un moteur de téléchargement avec abstraction de backend. MUZZIK doit repartir de cette génération et non d’anciennes branches utilisant aria2.
+Le dépôt Movviz actuel possède déjà un moteur de téléchargement avec abstraction de backend. MuzziQ doit repartir de cette génération et non d’anciennes branches utilisant aria2.
 
 ### Backends à considérer depuis Movviz
 
@@ -109,9 +109,9 @@ Le dépôt Movviz actuel possède déjà un moteur de téléchargement avec abst
 - `NativeTorrentBackend`
 - `WebTorrentBackend`
 
-**aria2 est explicitement hors scope pour MUZZIK.**
+**aria2 est explicitement hors scope pour MuzziQ.**
 
-MUZZIK ne doit pas introduire aria2, même comme fallback historique.
+MuzziQ ne doit pas introduire aria2, même comme fallback historique.
 
 ---
 
@@ -119,7 +119,7 @@ MUZZIK ne doit pas introduire aria2, même comme fallback historique.
 
 MetroList sert principalement de **référence comportementale et technique** pour comprendre comment un client moderne dialogue avec YouTube Music / InnerTube.
 
-Aucun code MetroList ne doit être copié dans MUZZIK.
+Aucun code MetroList ne doit être copié dans MuzziQ.
 
 Méthode :
 
@@ -127,7 +127,7 @@ Méthode :
 2. comprendre les responsabilités ;
 3. documenter les entrées/sorties ;
 4. reproduire les comportements nécessaires ;
-5. écrire une implémentation MUZZIK indépendante.
+5. écrire une implémentation MuzziQ indépendante.
 
 MetroList est particulièrement pertinent pour :
 
@@ -149,13 +149,13 @@ MetroList est particulièrement pertinent pour :
 - paroles et providers annexes ;
 - gestion des erreurs et changements de protocole.
 
-Le dépôt MetroList sépare actuellement un module `innertube`, ce qui confirme que cette responsabilité doit aussi être isolée dans MUZZIK.
+Le dépôt MetroList sépare actuellement un module `innertube`, ce qui confirme que cette responsabilité doit aussi être isolée dans MuzziQ.
 
 ---
 
 ## 1.3 Lidarr
 
-Lidarr **ne devient pas une dépendance** de MUZZIK.
+Lidarr **ne devient pas une dépendance** de MuzziQ.
 
 Il sert uniquement de **référence fonctionnelle** pour les problèmes spécifiques à la musique qui n’existent pas ou peu dans le cinéma.
 
@@ -179,7 +179,7 @@ Il sert uniquement de **référence fonctionnelle** pour les problèmes spécifi
 - recherche manuelle ;
 - gestion des fichiers existants.
 
-Toute fonctionnalité pertinente doit être réécrite dans le modèle MUZZIK/Movviz.
+Toute fonctionnalité pertinente doit être réécrite dans le modèle MuzziQ/Movviz.
 
 ---
 
@@ -187,7 +187,7 @@ Toute fonctionnalité pertinente doit être réécrite dans le modèle MUZZIK/Mo
 
 Plexamp est une **référence UX et musicale**.
 
-Ne jamais construire MUZZIK autour d’une API Plexamp ou d’un serveur Plex.
+Ne jamais construire MuzziQ autour d’une API Plexamp ou d’un serveur Plex.
 
 À observer :
 
@@ -208,12 +208,12 @@ Ne jamais construire MUZZIK autour d’une API Plexamp ou d’un serveur Plex.
 
 ---
 
-# 2. Principe absolu : MUZZIK fonctionne sans Plex
+# 2. Principe absolu : MuzziQ fonctionne sans Plex
 
 Installation minimale :
 
 ```text
-Docker MUZZIK
+Docker MuzziQ
      +
 /music
      +
@@ -225,7 +225,7 @@ provider catalogue/stream
 Résultat :
 
 ```text
-MUZZIK = fonctionnel
+MuzziQ = fonctionnel
 ```
 
 Plex peut être absent.
@@ -243,7 +243,7 @@ Un compte Google ne doit pas être obligatoire pour démarrer.
 ```text
 1. désactiver Plex
 2. désactiver toute intégration externe optionnelle
-3. conserver uniquement MUZZIK + fichiers locaux
+3. conserver uniquement MuzziQ + fichiers locaux
 4. vérifier que :
    - login fonctionne
    - bibliothèque fonctionne
@@ -272,13 +272,13 @@ Si ce test échoue, une dépendance optionnelle est devenue accidentellement str
                               REST / WS / SSE
                                         │
 ┌───────────────────────────────────────▼──────────────────────────────┐
-│                             MUZZIK API                               │
+│                             MuzziQ API                               │
 │                                                                      │
 │ Auth  Users  Library  Search  Player  Queue  AI  Acquisition         │
 └───────────────────────────────────────┬──────────────────────────────┘
                                         │
 ┌───────────────────────────────────────▼──────────────────────────────┐
-│                             MUZZIK CORE                              │
+│                             MuzziQ CORE                              │
 │                                                                      │
 │ Identity Resolver      Availability Engine      Recommendation       │
 │ Metadata Aggregator    Library Manager          Scheduler            │
@@ -320,7 +320,7 @@ distinct) pour le téléchargement. Pas de monorepo à outillage lourd (pas de T
 de pnpm workspaces) — juste un `package.json` racine et des sous-dossiers `engine/`,
 `resolver/` avec leur propre `package.json`, lancés comme process séparés.
 
-Repartir sur NestJS/Prisma pour MUZZIK signifierait réécrire toute la logique
+Repartir sur NestJS/Prisma pour MuzziQ signifierait réécrire toute la logique
 d'acquisition/scheduler/jobs de Movviz dans un paradigme différent (modules/DI Nest,
 ORM Prisma) avant même d'avoir un produit qui tourne. Ça contredit directement la
 règle §87 ("ne pas réinventer la roue") et §89 (ne pas extraire de packages partagés
@@ -362,7 +362,7 @@ Préférer un vrai client Android pour la lecture longue durée.
 
 Le client Android ne doit pas implémenter lui-même le catalogue YouTube Music.
 
-Le serveur MUZZIK reste maître.
+Le serveur MuzziQ reste maître.
 
 ## Déploiement
 
@@ -380,7 +380,7 @@ Le serveur MUZZIK reste maître.
 # 5. Monorepo cible
 
 ```text
-muzzik/
+muzziq/
 │
 ├── apps/
 │   ├── web/
@@ -433,7 +433,7 @@ La règle importante est la séparation des responsabilités.
 
 # 6. Domaine musical interne
 
-MUZZIK ne doit jamais utiliser un `videoId` YouTube comme identifiant principal d’un morceau.
+MuzziQ ne doit jamais utiliser un `videoId` YouTube comme identifiant principal d’un morceau.
 
 Même règle pour Plex.
 
@@ -476,13 +476,13 @@ Un même morceau peut exister :
 - dans une playlist ;
 - dans plusieurs éditions d’un album.
 
-MUZZIK doit comprendre qu’il s’agit du **même enregistrement** ou d’une variante.
+MuzziQ doit comprendre qu’il s’agit du **même enregistrement** ou d’une variante.
 
 ## Exemple
 
 ```text
 TrackRecording
-  id: muzzik:recording:abc123
+  id: muzziq:recording:abc123
 
   title: Numb
   artist: Linkin Park
@@ -634,7 +634,7 @@ Par défaut :
 ```text
 1. fichier local conforme au profil
 2. fichier local de qualité inférieure
-3. cache MUZZIK
+3. cache MuzziQ
 4. provider de streaming principal
 5. provider de streaming fallback
 6. intégration distante explicitement autorisée
@@ -755,7 +755,7 @@ Correct :
 ```text
 React
   ↓
-MUZZIK API
+MuzziQ API
   ↓
 Playback Resolver
   ↓
@@ -812,7 +812,7 @@ Ajoute éventuellement :
 
 ### Règle
 
-Les données YTM importées deviennent des **mappings/sources**, pas la base de vérité MUZZIK.
+Les données YTM importées deviennent des **mappings/sources**, pas la base de vérité MuzziQ.
 
 ---
 
@@ -851,13 +851,13 @@ Account sync: OK
 
 ---
 
-# 17. Catalogue MUZZIK
+# 17. Catalogue MuzziQ
 
 Le catalogue n’est pas la bibliothèque.
 
 ## Catalogue
 
-Tout ce que MUZZIK connaît.
+Tout ce que MuzziQ connaît.
 
 ## Bibliothèque
 
@@ -875,7 +875,7 @@ Cette distinction est indispensable pour les suggestions.
 
 ---
 
-# 18. Bibliothèque MUZZIK
+# 18. Bibliothèque MuzziQ
 
 La bibliothèque doit être indépendante du stockage physique.
 
@@ -952,7 +952,7 @@ Chaque transition doit être journalisée.
 
 Le moteur de Movviz doit servir de base.
 
-MUZZIK adapte les concepts vidéo au domaine musical.
+MuzziQ adapte les concepts vidéo au domaine musical.
 
 ```text
 AcquisitionRequest
@@ -983,13 +983,13 @@ MusicImportPipeline
 Architecture interdite :
 
 ```text
-MUZZIK → Lidarr → Prowlarr → qBittorrent
+MuzziQ → Lidarr → Prowlarr → qBittorrent
 ```
 
 Architecture cible :
 
 ```text
-MUZZIK
+MuzziQ
 ├── Indexer layer
 ├── Search
 ├── Parser
@@ -1029,7 +1029,7 @@ interface TorrentBackend {
 
 ### Backends
 
-MUZZIK ne doit pas dépendre fonctionnellement d’un backend.
+MuzziQ ne doit pas dépendre fonctionnellement d’un backend.
 
 Le backend sélectionné est un réglage serveur.
 
@@ -1340,7 +1340,7 @@ Ne jamais imposer un format unique.
 
 # 33. Bibliothèque existante
 
-MUZZIK doit pouvoir démarrer sur une bibliothèque existante sans rien renommer.
+MuzziQ doit pouvoir démarrer sur une bibliothèque existante sans rien renommer.
 
 Modes :
 
@@ -1391,7 +1391,7 @@ Un scan complet doit pouvoir reconstruire l’état.
 
 # 35. Source de vérité
 
-La base MUZZIK est la source de vérité applicative.
+La base MuzziQ est la source de vérité applicative.
 
 Mais elle ne doit pas inventer la présence d’un fichier.
 
@@ -1475,7 +1475,7 @@ Ne pas coupler au provider YouTube Music.
 
 # 39. Player
 
-Le player MUZZIK doit être une fonction de premier niveau, pas une intégration Plex.
+Le player MuzziQ doit être une fonction de premier niveau, pas une intégration Plex.
 
 Fonctions de base :
 
@@ -1499,7 +1499,7 @@ Fonctions de base :
 
 # 40. Queue centralisée
 
-La queue appartient à MUZZIK.
+La queue appartient à MuzziQ.
 
 ```text
 PlaybackSession
@@ -1561,7 +1561,7 @@ Ces valeurs doivent rester configurables.
 
 # 43. UserTaste
 
-MUZZIK doit construire son propre profil de goût.
+MuzziQ doit construire son propre profil de goût.
 
 ```text
 UserTaste
@@ -1628,7 +1628,7 @@ Le moteur de recommandation exécute ensuite.
 
 ---
 
-# 45. MUZZIK AI
+# 45. MuzziQ AI
 
 Réutiliser autant que possible l’architecture Movviz AI.
 
@@ -1661,7 +1661,7 @@ show_artist
 show_album
 ```
 
-Avant de dire qu’un morceau n’est pas disponible, l’IA doit interroger MUZZIK.
+Avant de dire qu’un morceau n’est pas disponible, l’IA doit interroger MuzziQ.
 
 ---
 
@@ -1861,7 +1861,7 @@ Fonctions possibles :
 Mais jamais :
 
 ```text
-MUZZIK Track ID = Plex ratingKey
+MuzziQ Track ID = Plex ratingKey
 ```
 
 et jamais :
@@ -1891,7 +1891,7 @@ Par défaut : prudence.
 
 # 55. Client web
 
-Le client web parle uniquement à l’API MUZZIK.
+Le client web parle uniquement à l’API MuzziQ.
 
 Il ne parle directement ni à :
 
@@ -1907,7 +1907,7 @@ Exceptions uniquement pour ressources publiques sans état si elles apportent un
 
 # 56. Client Android
 
-Le client Android est un **player/client MUZZIK**, pas un fork MetroList.
+Le client Android est un **player/client MuzziQ**, pas un fork MetroList.
 
 Responsabilités :
 
@@ -1980,7 +1980,7 @@ maison — c'est exactement le rôle prévu de la stack Media3 déjà choisie (�
 - Arborescence exposée à Android Auto : Continuer l'écoute, Bibliothèque, Playlists,
   Artistes suivis, Radios, Récemment ajoutés — même structure logique que le Home
   mobile (§46), pas une hiérarchie différente à maintenir en parallèle.
-- Recherche vocale ("Joue [artiste/titre] sur MUZZIK") routée vers l'API de recherche
+- Recherche vocale ("Joue [artiste/titre] sur MuzziQ") routée vers l'API de recherche
   unifiée du serveur (§47), résolue par le Playback Resolver (§12) exactement comme
   une recherche manuelle — aucune logique de lecture dupliquée pour Android Auto.
 - UI simplifiée et conforme aux contraintes de sécurité Android Auto (grosses cibles
@@ -1995,7 +1995,7 @@ maison — c'est exactement le rôle prévu de la stack Media3 déjà choisie (�
 
 Même philosophie que la mise à jour automatique du serveur Movviz
 (`src/lib/settings/autoUpdate.ts` côté serveur — vérification périodique d'une version
-distante, activable/désactivable) transposée à l'app Android, puisque MUZZIK n'est pas
+distante, activable/désactivable) transposée à l'app Android, puisque MuzziQ n'est pas
 distribué sur le Play Store (auto-hébergé, comme Movviz) :
 
 ```text
@@ -2010,10 +2010,10 @@ Téléchargement APK en arrière-plan (barre de progression)
 FileProvider + Intent ACTION_VIEW (PackageInstaller) → écran d'installation Android
 ```
 
-- Le serveur MUZZIK sert l'APK (endpoint `/api/updates/android/latest.apk`) — pas de
+- Le serveur MuzziQ sert l'APK (endpoint `/api/updates/android/latest.apk`) — pas de
   dépendance à un store tiers, cohérent avec le principe d'autonomie du plan (§2).
 - Vérification de signature APK par le système Android lui-même (le mécanisme standard
-  d'installation) — MUZZIK n'a pas à réimplémenter de vérification cryptographique.
+  d'installation) — MuzziQ n'a pas à réimplémenter de vérification cryptographique.
   Toujours signer l'APK avec la même clé entre versions, sinon l'installation
   systeme refuse la mise à jour (écrase au lieu de mettre à jour).
 - Jamais de mise à jour forcée/silencieuse sans confirmation utilisateur (Android ne
@@ -2062,7 +2062,7 @@ Le client embarque ses propres équivalents allégés des briques serveur :
 YouTube Music reste soumise au même blocage PoToken que le serveur (voir
 `docs/reverse-engineering/youtube-music/`) — mais sans le repli yt-dlp
 possible, puisque yt-dlp est un outil Python non déployable sur Android.
-En standalone, MUZZIK est donc essentiellement **un lecteur de bibliothèque
+En standalone, MuzziQ est donc essentiellement **un lecteur de bibliothèque
 locale avec moteur de goût**, pas un client de streaming complet. L'UI doit
 le dire clairement plutôt que de laisser l'utilisateur découvrir un bouton
 Play qui ne fonctionne jamais.
@@ -2345,7 +2345,7 @@ metadataJson
 lastVerifiedAt
 ```
 
-Permet de changer de provider sans changer les IDs MUZZIK.
+Permet de changer de provider sans changer les IDs MuzziQ.
 
 ---
 
@@ -2445,7 +2445,7 @@ hiresAnalysis
 aiActions
 ```
 
-Une régression provider ne doit pas forcer un rollback complet de MUZZIK.
+Une régression provider ne doit pas forcer un rollback complet de MuzziQ.
 
 ---
 
@@ -2536,7 +2536,7 @@ fiche local
 fiche Plex
 ```
 
-Il possède une seule fiche MUZZIK.
+Il possède une seule fiche MuzziQ.
 
 Elle montre ensuite :
 
@@ -2575,11 +2575,11 @@ Les boutons s’adaptent à l’état réel.
 
 Si l’utilisateur veut juste écouter, il clique Play.
 
-MUZZIK résout automatiquement la meilleure source.
+MuzziQ résout automatiquement la meilleure source.
 
 L’acquisition est un choix supplémentaire.
 
-C’est précisément ce qui distingue MUZZIK d’un frontend Arr.
+C’est précisément ce qui distingue MuzziQ d’un frontend Arr.
 
 ---
 
@@ -2636,7 +2636,7 @@ Availability Engine
       ↓
 local FLAC found
       ↓
-MUZZIK media endpoint
+MuzziQ media endpoint
       ↓
 HTTP range
       ↓
@@ -2738,7 +2738,7 @@ Documenter uniquement :
 - expirations ;
 - comportement fonctionnel.
 
-Puis implémenter côté MUZZIK.
+Puis implémenter côté MuzziQ.
 
 Ne pas transcrire des classes MetroList.
 
@@ -2781,7 +2781,7 @@ réutiliser Movviz
 Sinon :
 
 ```text
-ajouter la capacité au module MUZZIK correspondant
+ajouter la capacité au module MuzziQ correspondant
 ```
 
 ---
@@ -2795,7 +2795,7 @@ Pour chaque fonctionnalité :
    YES → réutiliser/refactoriser
 
 2. Est-ce spécifique à YouTube Music ?
-   YES → étudier MetroList puis implémenter provider MUZZIK
+   YES → étudier MetroList puis implémenter provider MuzziQ
 
 3. Est-ce spécifique aux bibliothèques musicales ?
    YES → étudier Lidarr/Plexamp/standards puis implémenter
@@ -2828,12 +2828,12 @@ Bonne décision :
 comprendre les cas métier
 +
 écrire MusicImportPipeline
-dans le core MUZZIK
+dans le core MuzziQ
 ```
 
 ---
 
-# 89. Code partagé Movviz / MUZZIK
+# 89. Code partagé Movviz / MuzziQ
 
 À terme, si plusieurs composants deviennent réellement communs, créer éventuellement des packages indépendants.
 
@@ -2849,7 +2849,7 @@ Exemples :
 
 Mais ne pas lancer cette extraction avant d’avoir identifié une vraie duplication stable.
 
-Éviter un refactor massif de Movviz juste pour MUZZIK V1.
+Éviter un refactor massif de Movviz juste pour MuzziQ V1.
 
 ---
 
@@ -2954,7 +2954,7 @@ Une modification d’un provider ne doit pas casser :
 
 Une modification du torrent engine ne doit pas casser le streaming.
 
-Une modification Plex ne doit pas casser MUZZIK.
+Une modification Plex ne doit pas casser MuzziQ.
 
 ---
 
@@ -2978,7 +2978,7 @@ Construire :
 Livrable :
 
 ```text
-MUZZIK boot
+MuzziQ boot
 login
 settings
 health
@@ -3030,7 +3030,7 @@ Livrable :
 ```text
 same song:
 stream source + local source
-MUZZIK chooses local
+MuzziQ chooses local
 ```
 
 ---
@@ -3100,11 +3100,11 @@ Download album
 
 ---
 
-## Phase H — MUZZIK AI
+## Phase H — MuzziQ AI
 
 Réutiliser moteur Movviz AI.
 
-Donner accès aux outils MUZZIK.
+Donner accès aux outils MuzziQ.
 
 ---
 
@@ -3116,7 +3116,7 @@ Seulement lorsque les contrats serveur/player sont suffisamment stables.
 
 ## Phase J — Plex
 
-**Après** que MUZZIK fonctionne parfaitement sans Plex.
+**Après** que MuzziQ fonctionne parfaitement sans Plex.
 
 Ajouter Plex en intégration.
 
@@ -3130,7 +3130,7 @@ V1 n’a pas besoin de tout.
 
 Elle doit cependant prouver l’architecture.
 
-MUZZIK V1 est valide si :
+MuzziQ V1 est valide si :
 
 ```text
 ✓ installation standalone
@@ -3173,7 +3173,7 @@ MUZZIK V1 est valide si :
 
 # 98. Règles interdites
 
-Ces règles doivent être données à tout agent travaillant sur MUZZIK.
+Ces règles doivent être données à tout agent travaillant sur MuzziQ.
 
 ## INTERDIT 1
 
@@ -3181,7 +3181,7 @@ Ne jamais faire de Plex une dépendance.
 
 ## INTERDIT 2
 
-Ne jamais stocker un ID YouTube/Plex comme ID canonique MUZZIK.
+Ne jamais stocker un ID YouTube/Plex comme ID canonique MuzziQ.
 
 ## INTERDIT 3
 
@@ -3250,7 +3250,7 @@ L’expérience finale doit être :
 ```text
 Je cherche n’importe quel artiste
         ↓
-MUZZIK le trouve
+MuzziQ le trouve
         ↓
 Je peux écouter immédiatement
         ↓
@@ -3258,17 +3258,17 @@ Je peux l’ajouter à ma bibliothèque
         ↓
 Je peux demander une vraie copie locale
         ↓
-MUZZIK cherche la meilleure release
+MuzziQ cherche la meilleure release
         ↓
-MUZZIK télécharge
+MuzziQ télécharge
         ↓
-MUZZIK vérifie et importe
+MuzziQ vérifie et importe
         ↓
 La prochaine lecture utilise automatiquement le fichier local
         ↓
-MUZZIK apprend mes goûts
+MuzziQ apprend mes goûts
         ↓
-MUZZIK construit mes radios et recommandations
+MuzziQ construit mes radios et recommandations
 ```
 
 Sans que l’utilisateur ait besoin de savoir si, derrière, le morceau provient de :
@@ -3282,13 +3282,13 @@ Sans que l’utilisateur ait besoin de savoir si, derrière, le morceau provient
 
 La provenance est une propriété technique.
 
-**Le morceau, l’album, la bibliothèque et l’expérience appartiennent à MUZZIK.**
+**Le morceau, l’album, la bibliothèque et l’expérience appartiennent à MuzziQ.**
 
 ---
 
 # 101. Architecture résumée en une phrase
 
-> **MUZZIK doit reprendre le cerveau, l’automatisation et les briques réutilisables de Movviz, réimplémenter proprement un provider YouTube Music à partir de l’observation de MetroList, utiliser Lidarr comme documentation des cas métier musicaux, s’inspirer de Plexamp pour l’expérience, et rester entièrement autonome vis-à-vis de Plex et de toute autre application externe.**
+> **MuzziQ doit reprendre le cerveau, l’automatisation et les briques réutilisables de Movviz, réimplémenter proprement un provider YouTube Music à partir de l’observation de MetroList, utiliser Lidarr comme documentation des cas métier musicaux, s’inspirer de Plexamp pour l’expérience, et rester entièrement autonome vis-à-vis de Plex et de toute autre application externe.**
 
 ---
 
@@ -3299,13 +3299,13 @@ La provenance est une propriété technique.
 - Lidarr : `https://github.com/Lidarr/Lidarr`
 
 Ces projets sont des références techniques/fonctionnelles.  
-Pour MetroList et Lidarr, MUZZIK doit utiliser une approche de **réimplémentation indépendante** et ne pas copier leur code source.
+Pour MetroList et Lidarr, MuzziQ doit utiliser une approche de **réimplémentation indépendante** et ne pas copier leur code source.
 
 ---
 
 # 103. Import Providers (Spotify, Deezer, Apple Music...)
 
-Au même titre que YouTube Music est un `MusicProvider` (catalogue + lecture), MUZZIK doit
+Au même titre que YouTube Music est un `MusicProvider` (catalogue + lecture), MuzziQ doit
 prévoir une famille de **providers d'import** : des services tiers dont on ne consomme
 que la bibliothèque personnelle de l'utilisateur (playlists, titres likés, artistes
 suivis, historique si l'API l'expose), pas le catalogue ni la lecture.
@@ -3314,7 +3314,7 @@ suivis, historique si l'API l'expose), pas le catalogue ni la lecture.
 
 Un import Spotify/Deezer ne doit **jamais** devenir une source de lecture ni une source
 de catalogue au même titre que YouTube Music. Ces services n'exposent pas de flux audio
-public/gratuit exploitable par MUZZIK. Leur seul rôle : **peupler la bibliothèque MUZZIK
+public/gratuit exploitable par MuzziQ. Leur seul rôle : **peupler la bibliothèque MuzziQ
 à partir de ce que l'utilisateur possédait déjà ailleurs**, puis laisser
 l'`IdentityResolver` et le `Playback Resolver` habituels décider comment chaque morceau
 sera réellement lu (YouTube Music, local, etc.).
@@ -3340,10 +3340,10 @@ interface LibraryImportProvider {
 1. Authentification via OAuth officiel de chaque plateforme uniquement — jamais de
    scraping de session privée ni de reverse engineering d'API non publique pour ces
    providers (contrairement à YouTube Music, qui est traité §1.2/§13 comme un cas à part
-   parce qu'il est aussi la source de lecture principale de MUZZIK).
+   parce qu'il est aussi la source de lecture principale de MuzziQ).
 2. Chaque titre importé passe par l'`IdentityResolver` (§7) exactement comme un résultat
    de recherche — un ID Spotify/Deezer devient un `provider_mappings` de plus, jamais un
-   identifiant canonique MUZZIK (mêmes règles que INTERDIT 2).
+   identifiant canonique MuzziQ (mêmes règles que INTERDIT 2).
 3. Un titre non résolu avec confiance suffisante reste `UNRESOLVED` plutôt que d'être
    fusionné à l'aveugle (règle IdentityResolver, voir INTERDIT 11 §104).
 4. L'import crée des `LibraryItem` avec `addPolicy = STREAM_ONLY` par défaut (§48) — un
@@ -3352,7 +3352,7 @@ interface LibraryImportProvider {
    import massif.
 5. Import incrémental : une resynchronisation périodique optionnelle détecte les ajouts
    côté service tiers, jamais les suppressions (même prudence que la règle de sync Plex
-   §53 — ne jamais supprimer automatiquement une entrée MUZZIK parce qu'elle a disparu
+   §53 — ne jamais supprimer automatiquement une entrée MuzziQ parce qu'elle a disparu
    d'une playlist Spotify).
 6. Un rapport d'import doit être visible : X titres importés, Y résolus automatiquement,
    Z non résolus à traiter manuellement. Ne jamais importer silencieusement.
@@ -3382,10 +3382,10 @@ résolution fiable ne ferait que produire des doublons en masse.
 
 ## 104.1 MusicBrainz = identité, pas catalogue principal
 
-Le catalogue MUZZIK agrège plusieurs sources, chacune avec un rôle distinct :
+Le catalogue MuzziQ agrège plusieurs sources, chacune avec un rôle distinct :
 
 ```text
-            MUZZIK ENTITY
+            MuzziQ ENTITY
                  │
       ┌──────────┼──────────┐
       │          │          │
@@ -3421,7 +3421,7 @@ fusion incorrecte pollue durablement l'historique d'écoute et les recommandatio
 
 Constats tirés du code et de l'historique réels de Movviz (documentation interne,
 `CHANGELOG.md`, `TODO_POST_MOTEUR_LECTURE.md`). Chaque point a coûté un bug en
-production ou un incident réel — MUZZIK part avec ces règles dès le premier commit au
+production ou un incident réel — MuzziQ part avec ces règles dès le premier commit au
 lieu de les redécouvrir.
 
 ## 105.1 Store JSON : jamais d'accès fichier direct
@@ -3443,14 +3443,14 @@ dans ce second cas.
 
 Next.js compile chaque route API dans un bundle séparé — une variable de module normale
 existe une fois par bundle, pas une fois par process. Tout cache, tout ring buffer de
-logs, tout compteur partagé doit être ancré `globalThis.__muzzikXxx ??= ...`, jamais une
+logs, tout compteur partagé doit être ancré `globalThis.__muzziqXxx ??= ...`, jamais une
 simple variable de module.
 
 ## 105.3 Pas de worker/complexité avant qu'un vrai besoin de volumétrie existe
 
 Movviz n'a ajouté un pool `worker_threads` pour les écritures JSON qu'une fois qu'un
 store réel a dépassé le seuil où `JSON.stringify` bloquait le thread principal
-plusieurs dizaines de ms. MUZZIK part avec la version simple (écriture inline coalescée)
+plusieurs dizaines de ms. MuzziQ part avec la version simple (écriture inline coalescée)
 et n'introduit l'offload worker que si un store dépasse effectivement ~1 Mo — ne pas
 préconstruire cette complexité pour une bibliothèque musicale qui démarre à zéro morceau.
 
@@ -3460,9 +3460,9 @@ Tout appel `fs.readdirSync`/`fs.readFile` avec un chemin non statique (construit
 `CONFIG_DIR`/`MUSIC_DIR`) fait que le traceur de fichiers de Next.js inclut TOUT le
 dossier contenant comme dépendance du bundle standalone. Sur Movviz, ça a produit un
 build de 446 Go (bibliothèque Plex entière aspirée dans `.next/standalone`) avant que
-`outputFileTracingExcludes` couvre explicitement `/music`, `/downloads`, `/muzzik-data`,
+`outputFileTracingExcludes` couvre explicitement `/music`, `/downloads`, `/muzziq-data`,
 `engine/`, à toutes les profondeurs relatives (`../`, `../../`, etc. — la résolution est
-relative au dossier de chaque route, pas à la racine du repo). MUZZIK doit configurer ces
+relative au dossier de chaque route, pas à la racine du repo). MuzziQ doit configurer ces
 exclusions dès le `next.config.ts` initial, pas après avoir eu le même incident.
 
 ## 105.5 Vérification post-modification : le typecheck ne suffit pas
@@ -3479,7 +3479,7 @@ Bug réel : `serverCapabilities.detect.ts` listait les encodeurs compilés dans 
 ffmpeg sans vérifier si le matériel derrière existait vraiment (ex. `av1_qsv` compilé
 mais aucun périphérique Quick Sync exposé au conteneur Docker) — le moteur choisissait
 l'encodeur, puis plantait au runtime, sans repli. Corrigé en testant une exécution réelle
-minimale (micro-encodage) plutôt que la seule liste déclarée. Pour MUZZIK : la même
+minimale (micro-encodage) plutôt que la seule liste déclarée. Pour MuzziQ : la même
 prudence s'applique à toute détection de capacité (fingerprint audio, décodeurs, backends
 torrent) — sonder l'exécution réelle, pas seulement la présence déclarée.
 
@@ -3488,7 +3488,7 @@ torrent) — sonder l'exécution réelle, pas seulement la présence déclarée.
 Un échec d'exécution (transcodage, résolution de lecture) doit dégrader progressivement
 (qualité inférieure, source alternative) avant de tomber en erreur fatale ou de basculer
 sur un fallback lourd. Movviz a laissé cette cascade à moitié câblée (`recordFallbackAttempt()`
-jamais appelé) — MUZZIK doit la construire dès le `Playback Resolver` (§12), pas l'ajouter
+jamais appelé) — MuzziQ doit la construire dès le `Playback Resolver` (§12), pas l'ajouter
 après coup.
 
 ## 105.8 Sécurité fichier : leçons directement applicables
@@ -3506,15 +3506,15 @@ après coup.
 ## 105.9 Réutilisation directe actée
 
 Conformément à §1.1 (réutilisation Movviz autorisée et souhaitée), les modules suivants
-sont portés tel quel ou quasi tel quel dès le bootstrap MUZZIK plutôt que réécrits :
+sont portés tel quel ou quasi tel quel dès le bootstrap MuzziQ plutôt que réécrits :
 
 - `fsJsonCache.ts` (store JSON cache/atomique) — porté directement, renommé
-  `__muzzik*` au lieu de `__movviz*`.
-- Pattern `readJsonCached`/`writeJsonCached` pour **tout** nouveau store MUZZIK
+  `__muzziq*` au lieu de `__movviz*`.
+- Pattern `readJsonCached`/`writeJsonCached` pour **tout** nouveau store MuzziQ
   (`library_items`, `provider_mappings`, `acquisition_jobs`...) — jamais d'accès fichier
   brut, dès le premier store écrit.
 - Pattern journal borné + flush disque debouncé (`searchLog`/`statusTransitions` côté
-  Movviz) pour tout futur journal MUZZIK (historique d'état d'acquisition, décisions de
+  Movviz) pour tout futur journal MuzziQ (historique d'état d'acquisition, décisions de
   scoring).
 
 Auth, scheduler, jobs et event bus Movviz sont candidats à un portage ultérieur une fois

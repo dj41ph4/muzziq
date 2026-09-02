@@ -17,7 +17,7 @@ export async function GET(req: Request) {
 
     // Availability Engine minimal (plan §10) : pour chaque résultat, vérifier
     // s'il existe déjà en local. C'est le cœur du vertical slice Phase C —
-    // "même morceau, source stream + source locale, MUZZIK choisit le local".
+    // "même morceau, source stream + source locale, MuzziQ choisit le local".
     const localFiles = listMediaFiles();
     const tracks = result.tracks.map((track) => {
       const match = resolveLocalMatch(track, localFiles);

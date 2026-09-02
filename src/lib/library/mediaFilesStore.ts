@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 
 /**
  * Store des fichiers audio locaux découverts par le scanner (plan §34).
- * La DB MUZZIK fait foi pour l'état applicatif, mais ne doit jamais inventer
+ * La DB MuzziQ fait foi pour l'état applicatif, mais ne doit jamais inventer
  * la présence d'un fichier (plan §35) — la réconciliation (mtime/size vs
  * disque réel) est faite par le scanner, pas ici.
  */

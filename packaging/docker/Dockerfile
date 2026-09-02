@@ -32,17 +32,17 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=9910 \
     HOSTNAME=0.0.0.0 \
-    MUZZIK_CONFIG_DIR=/config \
-    MUZZIK_MUSIC_DIR=/music
+    MUZZIQ_CONFIG_DIR=/config \
+    MUZZIQ_MUSIC_DIR=/music
 
-RUN addgroup -g 1001 muzzik && adduser -u 1001 -G muzzik -S muzzik
+RUN addgroup -g 1001 muzziq && adduser -u 1001 -G muzziq -S muzziq
 RUN apk add --no-cache su-exec
 
-COPY --from=builder --chown=muzzik:muzzik /app/.next/standalone ./
-COPY --from=builder --chown=muzzik:muzzik /app/.next/static ./.next/static
-COPY --from=builder --chown=muzzik:muzzik /app/public ./public
+COPY --from=builder --chown=muzziq:muzziq /app/.next/standalone ./
+COPY --from=builder --chown=muzziq:muzziq /app/.next/static ./.next/static
+COPY --from=builder --chown=muzziq:muzziq /app/public ./public
 
-RUN mkdir -p /config /music && chown muzzik:muzzik /config /music
+RUN mkdir -p /config /music && chown muzziq:muzziq /config /music
 # /config = state applicatif (stores JSON, Context Engine SQLite, torrents
 # en cours) · /music = bibliothèque finale (plan §4).
 VOLUME ["/config", "/music"]

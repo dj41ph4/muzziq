@@ -36,7 +36,7 @@ export default function PlexSettingsPage() {
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-5 pt-8 sm:px-8">
       <TopBar title="Plex" />
       <p className="float-in -mt-2 text-sm text-[var(--ink-soft)]">
-        Intégration optionnelle — MUZZIK fonctionne entièrement sans Plex. Jamais une dépendance.
+        Intégration optionnelle — MuzziQ fonctionne entièrement sans Plex. Jamais une dépendance.
       </p>
 
       <div className="glass float-in flex flex-col gap-2 rounded-2xl p-4">
@@ -59,8 +59,8 @@ export default function PlexSettingsPage() {
           className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm"
         >
           <option value="OFF">Synchronisation désactivée</option>
-          <option value="IMPORT_ONLY">Import uniquement (Plex → MUZZIK)</option>
-          <option value="EXPORT_ONLY">Export uniquement (MUZZIK → Plex)</option>
+          <option value="IMPORT_ONLY">Import uniquement (Plex → MuzziQ)</option>
+          <option value="EXPORT_ONLY">Export uniquement (MuzziQ → Plex)</option>
           <option value="BIDIRECTIONAL">Bidirectionnelle</option>
         </select>
         <button

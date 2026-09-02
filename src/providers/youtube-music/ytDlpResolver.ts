@@ -24,7 +24,7 @@ const execFileAsync = promisify(execFile);
  */
 
 function resolveBinaryPath(): string {
-  if (process.env.MUZZIK_YT_DLP_PATH) return process.env.MUZZIK_YT_DLP_PATH;
+  if (process.env.MUZZIQ_YT_DLP_PATH) return process.env.MUZZIQ_YT_DLP_PATH;
   // Chemin d'installation pip par défaut sur cette machine de dev (Windows,
   // Python non ajouté au PATH pour les scripts). En Docker/prod, `yt-dlp`
   // est attendu sur le PATH (image avec le paquet installé) — ce fallback

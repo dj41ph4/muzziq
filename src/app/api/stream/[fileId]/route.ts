@@ -6,7 +6,7 @@ import { getMediaFile } from "@/lib/library/mediaFilesStore";
 export const dynamic = "force-dynamic";
 
 /**
- * Lecture locale (plan §82) : local FLAC trouvé → endpoint media MUZZIK →
+ * Lecture locale (plan §82) : local FLAC trouvé → endpoint media MuzziQ →
  * HTTP range → client player. Pas de Plex.
  *
  * Sécurité (plan §58) : le chemin servi vient UNIQUEMENT

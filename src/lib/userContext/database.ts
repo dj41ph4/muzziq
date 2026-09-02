@@ -7,13 +7,13 @@ import type { UserContextHealth } from "./types";
 /**
  * Context Engine (porté depuis Movviz — "Context Engine" SQLite, additif et
  * résilient). Ledger d'événements par `user_id`, requêtable, qui alimente le
- * contexte injecté dans les prompts MUZZIK AI (plan §45) : historique
+ * contexte injecté dans les prompts MuzziQ AI (plan §45) : historique
  * d'écoute réel, reprises en cours, affinités — jamais halluciné par le
  * modèle. Additif : les stores JSON existants (fsJsonCache) restent la
  * source de vérité pour tout le reste de l'app ; ce module n'ajoute qu'une
  * couche de requêtabilité pour l'IA, jamais un remplacement.
  *
- * Résilient : `MUZZIK_CONTEXT_ENGINE_DISABLED=true` bascule immédiatement
+ * Résilient : `MUZZIQ_CONTEXT_ENGINE_DISABLED=true` bascule immédiatement
  * `getUserContextDb()` sur `null` sans toucher au fichier — tout appelant
  * traite déjà un DB `null` comme "indisponible, dégrader proprement" (voir
  * `withUserContextDb`).
@@ -24,17 +24,17 @@ export const USER_CONTEXT_DB_FILE = path.join(CONTEXT_DIR, "user-context.sqlite"
 export const USER_CONTEXT_SCHEMA_VERSION = 1;
 
 const g = globalThis as typeof globalThis & {
-  __muzzikUserContextDb?: DatabaseSync | null;
-  __muzzikUserContextDbPromise?: Promise<DatabaseSync | null>;
-  __muzzikUserContextDbError?: string | null;
+  __muzziqUserContextDb?: DatabaseSync | null;
+  __muzziqUserContextDbPromise?: Promise<DatabaseSync | null>;
+  __muzziqUserContextDbError?: string | null;
 };
 
 function isContextEngineDisabled(): boolean {
-  return /^(?:1|true|yes|on)$/i.test((process.env.MUZZIK_CONTEXT_ENGINE_DISABLED ?? "").trim());
+  return /^(?:1|true|yes|on)$/i.test((process.env.MUZZIQ_CONTEXT_ENGINE_DISABLED ?? "").trim());
 }
 
 function setError(error: unknown): void {
-  g.__muzzikUserContextDbError = error instanceof Error ? error.message : String(error);
+  g.__muzziqUserContextDbError = error instanceof Error ? error.message : String(error);
 }
 
 async function loadDatabaseSync(): Promise<(new (path: string) => DatabaseSync) | null> {
@@ -145,16 +145,16 @@ function ensureSchema(db: DatabaseSync): void {
 // normale n'aurait pas été partagée entre elles). Bug réel trouvé en test :
 // une première version marquait "initialisé" via un booléen posé AVANT que
 // la promesse ne se résolve — des appels concurrents (Promise.all sur
-// plusieurs requêtes SQL dans le même GET) lisaient alors g.__muzzikUserContextDb
+// plusieurs requêtes SQL dans le même GET) lisaient alors g.__muzziqUserContextDb
 // encore undefined et recevaient `null` au lieu d'attendre la vraie
 // connexion. Mémoriser la PROMESSE elle-même élimine la fenêtre de course :
 // tout appel concurrent attend la même promesse jusqu'à sa résolution.
 export function getUserContextDb(): Promise<DatabaseSync | null> {
-  if (g.__muzzikUserContextDbPromise) return g.__muzzikUserContextDbPromise;
+  if (g.__muzziqUserContextDbPromise) return g.__muzziqUserContextDbPromise;
 
-  g.__muzzikUserContextDbPromise = (async () => {
+  g.__muzziqUserContextDbPromise = (async () => {
     if (isContextEngineDisabled()) {
-      g.__muzzikUserContextDbError = null;
+      g.__muzziqUserContextDbError = null;
       return null;
     }
 
@@ -165,8 +165,8 @@ export function getUserContextDb(): Promise<DatabaseSync | null> {
       fs.mkdirSync(CONTEXT_DIR, { recursive: true });
       const db = new Database(USER_CONTEXT_DB_FILE);
       ensureSchema(db);
-      g.__muzzikUserContextDb = db;
-      g.__muzzikUserContextDbError = null;
+      g.__muzziqUserContextDb = db;
+      g.__muzziqUserContextDbError = null;
       return db;
     } catch (error) {
       setError(error);
@@ -174,7 +174,7 @@ export function getUserContextDb(): Promise<DatabaseSync | null> {
     }
   })();
 
-  return g.__muzzikUserContextDbPromise;
+  return g.__muzziqUserContextDbPromise;
 }
 
 export async function withUserContextDb<T>(fn: (db: DatabaseSync) => T, fallback: T): Promise<T> {
@@ -191,9 +191,9 @@ export async function withUserContextDb<T>(fn: (db: DatabaseSync) => T, fallback
 export async function getUserContextHealth(): Promise<UserContextHealth> {
   const db = await getUserContextDb();
   return {
-    database: db ? "ok" : g.__muzzikUserContextDbError ? "error" : "unavailable",
+    database: db ? "ok" : g.__muzziqUserContextDbError ? "error" : "unavailable",
     schemaVersion: USER_CONTEXT_SCHEMA_VERSION,
     file: USER_CONTEXT_DB_FILE,
-    lastError: g.__muzzikUserContextDbError ?? null,
+    lastError: g.__muzziqUserContextDbError ?? null,
   };
 }

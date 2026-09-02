@@ -1,5 +1,5 @@
 /**
- * Utilisateurs MUZZIK (porté depuis Movviz src/lib/auth, simplifié — pas de
+ * Utilisateurs MuzziQ (porté depuis Movviz src/lib/auth, simplifié — pas de
  * champs Plex/requêtes spécifiques à Movviz, pas pertinents ici).
  */
 
