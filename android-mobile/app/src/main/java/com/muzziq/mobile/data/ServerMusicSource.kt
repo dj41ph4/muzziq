@@ -5,7 +5,7 @@ import com.muzziq.mobile.data.model.TrackSource
 
 /**
  * Mode Lié (§56.4, §56) — parle uniquement à l'API MuzziQ, jamais directement à un
- * provider (INTERDIT 10 côté serveur, respecté ici en ne consommant que /api/*).
+ * provider (INTERDIT 10 côté serveur, respecté ici en ne consommant que /api/).
  * Le serveur reste maître du catalogue, de l'identité, des recommandations.
  */
 class ServerMusicSource(

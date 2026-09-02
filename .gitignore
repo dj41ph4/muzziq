@@ -16,6 +16,12 @@ next-env.d.ts
 /build
 /dist
 
+# Android local build state and signing configuration
+/android-mobile/.gradle/
+/android-mobile/app/build/
+/android-mobile/local.properties
+/android-mobile/keystore.properties
+
 # misc
 .DS_Store
 Thumbs.db
@@ -37,4 +43,3 @@ Thumbs.db
 .aider*
 AGENTS.md
 .opencode/
-

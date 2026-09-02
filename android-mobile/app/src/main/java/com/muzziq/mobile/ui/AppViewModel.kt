@@ -7,6 +7,9 @@ import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.data.AppPrefs
 import com.muzziq.mobile.data.MusicSource
 import com.muzziq.mobile.data.ServerMusicSource
+import com.muzziq.mobile.core.capabilities.CapabilityManager
+import com.muzziq.mobile.core.capabilities.MuzziQCapabilities
+import com.muzziq.mobile.core.capabilities.ServerConnectionState
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.playback.MusicSourceLocator
 import com.muzziq.mobile.playback.PlayerController
@@ -27,6 +30,7 @@ sealed interface RootUiState {
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = AppPrefs(application)
+    private val capabilityManager = CapabilityManager()
     val player = PlayerController(application)
 
     private val _state = MutableStateFlow<RootUiState>(RootUiState.Loading)
@@ -44,6 +48,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
+    private val _serverConnectionState = MutableStateFlow(ServerConnectionState.DISCONNECTED)
+    val serverConnectionState: StateFlow<ServerConnectionState> = _serverConnectionState.asStateFlow()
+    private val _capabilities = MutableStateFlow(capabilityManager.forConnection(ServerConnectionState.DISCONNECTED))
+    val capabilities: StateFlow<MuzziQCapabilities> = _capabilities.asStateFlow()
+
     var musicSource: MusicSource? = null
         private set
 
@@ -52,6 +61,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     init {
         StandaloneMusicSourceHolder.instance = standalone
         player.connect()
+        viewModelScope.launch {
+            prefs.serverConnectionState.collect { updateConnectionState(it) }
+        }
         viewModelScope.launch {
             val onboarded = prefs.onboarded.first()
             if (!onboarded) {
@@ -86,10 +98,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun chooseLinked(url: String) {
         viewModelScope.launch {
+            prefs.setServerConnectionState(ServerConnectionState.CONNECTING)
             _busy.value = true
             _error.value = null
             val ok = testServer(url)
             if (!ok) {
+                prefs.setServerConnectionState(ServerConnectionState.ERROR)
                 _error.value = "Ce serveur ne répond pas comme un serveur MuzziQ."
                 _busy.value = false
                 return@launch
@@ -114,6 +128,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         MusicSourceLocator.set(source)
         _state.value = RootUiState.Ready(AppMode.LINKED)
         refreshLibrary()
+    }
+
+    private fun updateConnectionState(state: ServerConnectionState) {
+        _serverConnectionState.value = state
+        _capabilities.value = capabilityManager.forConnection(state)
     }
 
     fun rescanStandaloneLibrary() {

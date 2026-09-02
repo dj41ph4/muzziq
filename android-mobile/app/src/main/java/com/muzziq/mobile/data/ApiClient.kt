@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Client HTTP vers un serveur MuzziQ — mode Lié uniquement (§56.4). Ne parle
  * jamais à un provider tiers directement (règle absolue du serveur MuzziQ) :
- * uniquement les routes /api/* déjà construites et vérifiées côté serveur.
+ * uniquement les routes sous /api/ déjà construites et vérifiées côté serveur.
  */
 interface MuzziqApi {
     @GET("/api/health")
