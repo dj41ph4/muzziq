@@ -11,6 +11,7 @@ import com.muzziq.mobile.data.model.PlayableSource
 import com.muzziq.mobile.data.model.PlaylistsResponse
 import com.muzziq.mobile.data.model.ResolvedPlayback
 import com.muzziq.mobile.data.model.SearchResult
+import com.muzziq.mobile.data.model.ServerCapabilitiesResponse
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
@@ -64,6 +65,9 @@ interface MuzziqApi {
 
     @GET("/api/updates/android")
     suspend fun androidUpdate(): Response<AndroidUpdateInfo>
+
+    @GET("/api/capabilities")
+    suspend fun capabilities(): Response<ServerCapabilitiesResponse>
 }
 
 object ApiClientFactory {

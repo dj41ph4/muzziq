@@ -40,9 +40,13 @@ class StandaloneHistoryAdapter(private val standalone: StandaloneMusicSource) : 
     }
 }
 
-/** Câblé sur AppPrefs + CapabilityManager — même logique déjà utilisée dans AppViewModel,
- * exposée ici comme contrat indépendant pour un consommateur qui n'a pas besoin de tout
- * AppViewModel (ex. PlaybackService, Android Auto). */
+/** Câblé sur AppPrefs + CapabilityManager. Attention, limite réelle : contrairement à
+ * `AppViewModel.capabilities` (qui interroge `/api/capabilities` via `refreshServerCapabilities()`),
+ * cet adaptateur n'a accès qu'à `ServerConnectionState`, jamais aux vraies capacités
+ * négociées — `CapabilityManager.forConnection()` renvoie donc toujours la valeur par
+ * défaut (aucune capacité serveur) ici, quel que soit l'état de connexion. Utile pour un
+ * consommateur qui n'a besoin que de l'état de connexion ; à ne PAS utiliser pour de
+ * vraies capacités tant qu'il n'est pas branché sur la même réponse serveur qu'AppViewModel. */
 class AppPrefsCapabilityProvider(
     private val prefs: AppPrefs,
     private val capabilityManager: CapabilityManager = CapabilityManager(),

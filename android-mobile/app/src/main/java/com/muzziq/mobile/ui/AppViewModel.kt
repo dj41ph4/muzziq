@@ -3,6 +3,7 @@ package com.muzziq.mobile.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.muzziq.mobile.data.ApiClientFactory
 import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.data.AppPrefs
 import com.muzziq.mobile.data.MusicSource
@@ -128,11 +129,50 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         MusicSourceLocator.set(source)
         _state.value = RootUiState.Ready(AppMode.LINKED)
         refreshLibrary()
+        refreshServerCapabilities(url)
+    }
+
+    /** Interroge /api/capabilities plutôt que de supposer qu'un serveur connecté possède
+     * toutes les capacités (l'ancien comportement de CapabilityManager.forConnection —
+     * gardé comme repli si l'appel échoue, jamais comme vérité une fois le vrai serveur
+     * interrogeable). Échec réseau ⇒ on garde les capacités par défaut (aucune capacité
+     * "serveur" supposée), jamais une erreur qui bloque l'app. */
+    private fun refreshServerCapabilities(url: String) {
+        viewModelScope.launch {
+            val api = ApiClientFactory.create(url)
+            val result = runCatching { api.capabilities() }
+            val payload = result.getOrNull()?.takeIf { it.isSuccessful }?.body()?.capabilities
+            if (payload != null) {
+                _capabilities.value = _capabilities.value.copy(
+                    flacAcquisition = payload.flacAcquisition,
+                    torrentAcquisition = payload.torrentAcquisition,
+                    nasLibrary = payload.nasLibrary,
+                    monitoring = payload.monitoring,
+                    automaticUpgrade = payload.automaticUpgrade,
+                    centralSync = payload.centralSync,
+                    remoteJam = payload.remoteJam,
+                )
+            }
+        }
     }
 
     private fun updateConnectionState(state: ServerConnectionState) {
         _serverConnectionState.value = state
-        _capabilities.value = capabilityManager.forConnection(state)
+        // CONNECTED/DEGRADED : ne pas écraser avec le repli "tout activé" de
+        // CapabilityManager ici — refreshServerCapabilities() (appelé par
+        // activateLinked) est la seule source de vérité une fois un serveur
+        // réellement interrogé via /api/capabilities. Sans ce garde-fou, cette
+        // collecte (déclenchée par tout changement de ServerConnectionState,
+        // y compris après que refreshServerCapabilities ait déjà répondu)
+        // pouvait réécraser les vraies capacités avec le placeholder statique
+        // "tout vrai" — bug réel repéré en écrivant ce commentaire, corrigé
+        // avant d'être poussé.
+        if (state == ServerConnectionState.DISCONNECTED ||
+            state == ServerConnectionState.CONNECTING ||
+            state == ServerConnectionState.ERROR
+        ) {
+            _capabilities.value = capabilityManager.forConnection(state)
+        }
     }
 
     fun rescanStandaloneLibrary() {

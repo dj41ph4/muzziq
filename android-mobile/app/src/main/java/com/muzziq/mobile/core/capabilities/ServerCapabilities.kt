@@ -29,18 +29,25 @@ data class MuzziQCapabilities(
     val remoteJam: Boolean = false,
 )
 
-/** Source unique de la disponibilité : serveur absent signifie enrichissements absents, jamais app absente. */
+/**
+ * Source unique de la disponibilité : serveur absent signifie enrichissements
+ * absents, jamais app absente.
+ *
+ * Historique : la première version de cette classe activait TOUTES les
+ * capacités serveur dès `CONNECTED`/`DEGRADED`, sans jamais interroger le
+ * serveur — un placeholder posé avant que `/api/capabilities` existe. Ce
+ * n'est plus le cas : le serveur expose maintenant cette route
+ * (`src/app/api/capabilities/route.ts`) et `AppViewModel.refreshServerCapabilities()`
+ * la consomme réellement. `forConnection()` ne doit donc plus fabriquer
+ * de capacités — seul un état non connecté est déterminable sans appel
+ * réseau (aucune capacité serveur). Rester connecté sans avoir encore reçu
+ * de réponse `/api/capabilities` doit rester honnête : aucune capacité
+ * supposée tant que la négociation réelle n'a pas eu lieu.
+ */
 class CapabilityManager {
     fun forConnection(state: ServerConnectionState): MuzziQCapabilities = when (state) {
-        ServerConnectionState.CONNECTED, ServerConnectionState.DEGRADED -> MuzziQCapabilities(
-            flacAcquisition = true,
-            torrentAcquisition = true,
-            nasLibrary = true,
-            monitoring = true,
-            automaticUpgrade = true,
-            centralSync = true,
-            remoteJam = true,
-        )
+        ServerConnectionState.CONNECTED,
+        ServerConnectionState.DEGRADED,
         ServerConnectionState.DISCONNECTED,
         ServerConnectionState.CONNECTING,
         ServerConnectionState.ERROR -> MuzziQCapabilities()

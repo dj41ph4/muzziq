@@ -157,6 +157,34 @@ data class PlayableSource(
     val bitrate: Int? = null,
 )
 
+/** GET /api/capabilities — négociation de capacités serveur (voir
+ * core/capabilities/ServerCapabilities.kt et android-mobile/docs). Reflet
+ * fidèle de src/app/api/capabilities/route.ts, jamais un champ inventé côté
+ * client qui n'existe pas côté réponse serveur réelle. */
+@JsonClass(generateAdapter = true)
+data class ServerCapabilitiesResponse(
+    val server: ServerInfo,
+    val capabilities: ServerCapabilitiesPayload,
+)
+
+@JsonClass(generateAdapter = true)
+data class ServerInfo(
+    val name: String,
+    val version: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class ServerCapabilitiesPayload(
+    val flacAcquisition: Boolean = false,
+    val torrentAcquisition: Boolean = false,
+    val nasLibrary: Boolean = false,
+    val monitoring: Boolean = false,
+    val automaticUpgrade: Boolean = false,
+    val centralSync: Boolean = false,
+    val remoteJam: Boolean = false,
+    val plexIntegration: Boolean = false,
+)
+
 /** GET /api/updates/android — mise à jour auto-hébergée (§56.3). */
 @JsonClass(generateAdapter = true)
 data class AndroidUpdateInfo(
