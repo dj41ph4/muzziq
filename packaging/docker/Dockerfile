@@ -7,9 +7,9 @@
 # burn-in sous-titres pour de la musique), pas d'engine/ séparé (le backend
 # torrent tourne dans le process Next.js — voir les règles opérationnelles du projet).
 #
-# NON VÉRIFIÉ PAR UN VRAI `docker build` — Docker n'est pas disponible dans
-# l'environnement où ce fichier a été écrit. Pattern éprouvé (Movviz tourne
-# en prod dessus), mais à tester réellement avant tout déploiement.
+# Build réel vérifié le 2026-09-02 (GitHub Actions, amd64+arm64, image
+# publiée sur Docker Hub). Bug trouvé au premier essai et corrigé : le
+# dossier public/ n'existait pas dans ce projet (COPY /app/public échouait).
 
 FROM node:22-alpine3.20 AS deps
 WORKDIR /app
