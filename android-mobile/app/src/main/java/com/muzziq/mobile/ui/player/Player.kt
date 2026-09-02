@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.muzziq.mobile.data.model.Track
+import com.muzziq.mobile.data.model.TrackSource
 import com.muzziq.mobile.ui.palette.rememberDominantColor
 import com.muzziq.mobile.ui.theme.MuzziQColors
 import kotlinx.coroutines.delay
@@ -167,6 +168,17 @@ fun SharedTransitionScope.PlayerScreen(
                 Column(Modifier.weight(1f)) {
                     Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(track.artist, color = MuzziQColors.TextMuted, fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+                    // Affichage de source (plan §39) — dérivé de track.source, déjà connu
+                    // sans appel réseau supplémentaire : fichier local vs flux serveur.
+                    Text(
+                        when (track.source) {
+                            is TrackSource.Local -> "Fichier local"
+                            is TrackSource.Server -> "Diffusion serveur"
+                        },
+                        color = MuzziQColors.TextFaint,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
                 }
                 // Favoris Room (§56.4) — indépendant du mode et du blocage cipher YouTube,
                 // fonctionne identiquement en standalone et en lié, jamais un bouton mort :
