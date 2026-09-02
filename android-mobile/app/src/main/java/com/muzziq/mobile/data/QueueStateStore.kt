@@ -63,10 +63,12 @@ class QueueStateStore(context: Context) {
             sourceKind = when (source) {
                 is TrackSource.Server -> "SERVER"
                 is TrackSource.Local -> "LOCAL"
+                is TrackSource.Spotify -> "SPOTIFY"
             },
             sourceRef = when (val s = source) {
                 is TrackSource.Server -> s.recordingId
                 is TrackSource.Local -> s.contentUri
+                is TrackSource.Spotify -> s.spotifyTrackId
             },
         )
 
@@ -77,7 +79,11 @@ class QueueStateStore(context: Context) {
             album = album,
             durationSeconds = durationSeconds,
             artworkUrl = artworkUrl,
-            source = if (sourceKind == "LOCAL") TrackSource.Local(sourceRef) else TrackSource.Server(sourceRef),
+            source = when (sourceKind) {
+                "LOCAL" -> TrackSource.Local(sourceRef)
+                "SPOTIFY" -> TrackSource.Spotify(sourceRef)
+                else -> TrackSource.Server(sourceRef)
+            },
         )
     }
 }

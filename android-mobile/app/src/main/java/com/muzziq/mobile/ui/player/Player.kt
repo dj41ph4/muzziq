@@ -174,6 +174,10 @@ fun SharedTransitionScope.PlayerScreen(
                         when (track.source) {
                             is TrackSource.Local -> "Fichier local"
                             is TrackSource.Server -> "Diffusion serveur"
+                            // Pas encore un vrai chemin de lecture (voir SpotifyProvider.streamResolver) —
+                            // ce libellé n'est atteint que si l'UI affiche un jour un morceau Spotify
+                            // dans le plein écran, pas encore le cas (mode exclusif Standalone/Lié).
+                            is TrackSource.Spotify -> "Spotify"
                         },
                         color = MuzziQColors.TextFaint,
                         fontSize = 11.sp,

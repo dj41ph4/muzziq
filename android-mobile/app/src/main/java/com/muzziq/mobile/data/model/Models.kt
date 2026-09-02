@@ -320,7 +320,7 @@ data class PersistedTrackDto(
     val album: String? = null,
     val durationSeconds: Double? = null,
     val artworkUrl: String? = null,
-    /** "SERVER" | "LOCAL" — reflet de TrackSource, jamais une 3e valeur inventée. */
+    /** "SERVER" | "LOCAL" | "SPOTIFY" — reflet de TrackSource, jamais une 4e valeur inventée. */
     val sourceKind: String,
     val sourceRef: String,
 )
@@ -337,4 +337,12 @@ sealed interface TrackSource {
     data class Server(val recordingId: String) : TrackSource
     /** Mode Standalone — content:// URI MediaStore, jouable directement, aucun réseau. */
     data class Local(val contentUri: String) : TrackSource
+    /** Compte Spotify lié (plan §67, priorité 5) — [spotifyTrackId] est l'id catalogue
+     * Spotify brut, JAMAIS un id MuzziQ (règle absolue) : un ProviderMapping fait le
+     * lien si/quand ce morceau est identifié comme le même Recording qu'une autre
+     * source. StreamResolver renvoie un échec explicite pour cette source — la Web
+     * API Spotify ne fournit aucune URL de flux audio à un tiers (voir
+     * providers/spotify/SpotifyProvider.kt), seulement catalogue/bibliothèque/
+     * playlists en lecture. */
+    data class Spotify(val spotifyTrackId: String) : TrackSource
 }

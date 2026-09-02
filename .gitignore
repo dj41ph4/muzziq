@@ -21,6 +21,7 @@ next-env.d.ts
 /android-mobile/app/build/
 /android-mobile/local.properties
 /android-mobile/keystore.properties
+/android-mobile/spotify.properties
 
 # misc
 .DS_Store

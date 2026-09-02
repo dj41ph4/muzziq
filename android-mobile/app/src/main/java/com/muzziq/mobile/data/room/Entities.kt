@@ -48,7 +48,7 @@ data class TrackEntity(
     val albumId: String? = null,
     val durationSeconds: Double? = null,
     val artworkUrl: String? = null,
-    /** "SERVER" | "LOCAL" — reflet de TrackSource (data/model/Models.kt), jamais une 3e valeur inventée. */
+    /** "SERVER" | "LOCAL" | "SPOTIFY" — reflet de TrackSource (data/model/Models.kt), jamais une 4e valeur inventée. */
     val sourceType: String,
     val trackNumber: Int? = null,
 )
@@ -95,7 +95,7 @@ data class PlaylistItemEntity(
     val album: String? = null,
     val durationSeconds: Double? = null,
     val artworkUrl: String? = null,
-    /** "SERVER" | "LOCAL" — reflet de TrackSource, jamais une 3e valeur inventée. */
+    /** "SERVER" | "LOCAL" | "SPOTIFY" — reflet de TrackSource, jamais une 4e valeur inventée. */
     val sourceKind: String,
     val sourceRef: String,
 )
