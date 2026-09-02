@@ -1,6 +1,6 @@
 {
   "name": "muzzik",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "MUZZIK — plateforme musicale personnelle : catalogue unifié, lecture instantanée (YouTube Music), bibliothèque locale, acquisition automatisée.",
   "scripts": {
