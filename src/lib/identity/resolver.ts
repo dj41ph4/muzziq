@@ -34,21 +34,45 @@ export interface IdentityMatch {
   confidence: number;
 }
 
-/** Score de confiance entre un résultat externe et un fichier local — jamais un booléen. */
-export function matchConfidence(external: ExternalTrack, local: MediaFile): number {
-  const artistMatch = normalize(external.artist) === normalize(local.artist) ? 0.4 : 0;
+/** Champs minimaux nécessaires pour comparer deux morceaux, indépendamment de leur type concret (MediaFile, Recording, piste Plex...). */
+export interface MatchableTrack {
+  title: string;
+  artist: string;
+  durationSeconds?: number;
+}
 
-  const nTitleExt = normalize(external.title);
-  const nTitleLocal = normalize(local.title);
-  const titleMatch = nTitleExt === nTitleLocal ? 0.4 : nTitleExt.includes(nTitleLocal) || nTitleLocal.includes(nTitleExt) ? 0.2 : 0;
+/** Score de confiance entre deux morceaux (titre/artiste/durée) — jamais un booléen. Cœur partagé par matchConfidence et tout autre appariement (import Plex, etc.). */
+export function trackMatchConfidence(a: MatchableTrack, b: MatchableTrack): number {
+  const artistMatch = normalize(a.artist) === normalize(b.artist) ? 0.4 : 0;
+
+  const nTitleA = normalize(a.title);
+  const nTitleB = normalize(b.title);
+  const titleMatch = nTitleA === nTitleB ? 0.4 : nTitleA.includes(nTitleB) || nTitleB.includes(nTitleA) ? 0.2 : 0;
 
   let durationMatch = 0;
-  if (external.durationSeconds && local.durationSeconds) {
-    const delta = Math.abs(external.durationSeconds - local.durationSeconds);
+  if (a.durationSeconds && b.durationSeconds) {
+    const delta = Math.abs(a.durationSeconds - b.durationSeconds);
     durationMatch = delta <= DURATION_TOLERANCE_SECONDS ? 0.2 : 0;
   }
 
   return artistMatch + titleMatch + durationMatch;
+}
+
+/** Score de confiance entre un résultat externe et un fichier local — jamais un booléen. */
+export function matchConfidence(external: ExternalTrack, local: MediaFile): number {
+  return trackMatchConfidence(external, local);
+}
+
+/** Meilleure correspondance parmi une liste de candidats "matchables" (titre/artiste/durée), ou undefined sous le seuil (INTERDIT 7 : jamais de fusion sous confiance). */
+export function bestMatch<T extends MatchableTrack>(external: MatchableTrack, candidates: T[]): { candidate: T; confidence: number } | undefined {
+  let best: { candidate: T; confidence: number } | undefined;
+  for (const candidate of candidates) {
+    const confidence = trackMatchConfidence(external, candidate);
+    if (confidence >= RESOLUTION_CONFIDENCE_THRESHOLD && (!best || confidence > best.confidence)) {
+      best = { candidate, confidence };
+    }
+  }
+  return best;
 }
 
 /** Meilleure correspondance locale pour un résultat externe, ou undefined si rien n'atteint le seuil de confiance (reste UNRESOLVED). */

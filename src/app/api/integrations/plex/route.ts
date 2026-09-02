@@ -3,14 +3,26 @@ import { getPlexConfig, updatePlexConfig } from "@/lib/integrations/plex/store";
 
 export const dynamic = "force-dynamic";
 
+function mask(secret: string): string {
+  return secret ? `••••${secret.slice(-4)}` : "";
+}
+
 export async function GET() {
   const config = getPlexConfig();
-  // Jamais le token en clair une fois enregistré.
-  return NextResponse.json({ ...config, token: config.token ? `••••${config.token.slice(-4)}` : "" });
+  // Jamais les tokens en clair une fois enregistrés.
+  return NextResponse.json({
+    ...config,
+    token: mask(config.token),
+    accountToken: config.accountToken ? mask(config.accountToken) : undefined,
+  });
 }
 
 export async function PATCH(req: Request) {
   const body = await req.json();
   const next = updatePlexConfig(body);
-  return NextResponse.json(next);
+  return NextResponse.json({
+    ...next,
+    token: mask(next.token),
+    accountToken: next.accountToken ? mask(next.accountToken) : undefined,
+  });
 }

@@ -5,6 +5,7 @@ import { findOrCreateRecordingFromExternal } from "@/lib/library/recordingResolu
 import { recordPlaybackStartedContext } from "@/lib/userContext/ingest";
 import { adjustArtistAffinity } from "@/lib/userContext/preferences";
 import { DEFAULT_USER_ID } from "@/lib/userContext/types";
+import { exportPlexScrobble } from "@/lib/integrations/plex/historySync";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,14 @@ export async function POST(req: Request) {
       durationMs: recording.durationSeconds ? recording.durationSeconds * 1000 : undefined,
     });
     await adjustArtistAffinity(DEFAULT_USER_ID, recording.artist, 0.6);
+  }
+
+  // Export best-effort vers Plex (§10 — jamais bloquant pour la lecture
+  // locale, jamais depuis l'UI : uniquement ce endpoint serveur). N'agit que
+  // si syncPolicy EXPORT_ONLY/BIDIRECTIONAL ET qu'un mapping Plex existe déjà
+  // pour ce Recording (posé par un sync de bibliothèque précédent).
+  if (body.type === "PLAY_COMPLETE") {
+    exportPlexScrobble(recording.id).catch(() => {});
   }
 
   return NextResponse.json({ ...event, recording });
