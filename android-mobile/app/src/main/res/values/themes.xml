@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Thème sombre par défaut, jamais de flash blanc au démarrage (§56.1). -->
+    <style name="Theme.MuzziQ" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
+    </style>
+
+    <style name="Theme.MuzziQ.Splash" parent="Theme.MuzziQ">
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme" tools:targetApi="31">@style/Theme.MuzziQ</item>
+    </style>
+</resources>

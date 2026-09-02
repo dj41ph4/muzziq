@@ -1,0 +1,169 @@
+package com.muzziq.mobile.ui
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.muzziq.mobile.data.AppMode
+import com.muzziq.mobile.data.AppPrefs
+import com.muzziq.mobile.data.MusicSource
+import com.muzziq.mobile.data.ServerMusicSource
+import com.muzziq.mobile.data.model.Track
+import com.muzziq.mobile.playback.MusicSourceLocator
+import com.muzziq.mobile.playback.PlayerController
+import com.muzziq.mobile.standalone.MigrationManager
+import com.muzziq.mobile.standalone.StandaloneMusicSource
+import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
+sealed interface RootUiState {
+    data object Loading : RootUiState
+    data object Onboarding : RootUiState
+    data class Ready(val mode: AppMode) : RootUiState
+}
+
+class AppViewModel(application: Application) : AndroidViewModel(application) {
+    private val prefs = AppPrefs(application)
+    val player = PlayerController(application)
+
+    private val _state = MutableStateFlow<RootUiState>(RootUiState.Loading)
+    val state: StateFlow<RootUiState> = _state.asStateFlow()
+
+    private val _library = MutableStateFlow<List<Track>>(emptyList())
+    val library: StateFlow<List<Track>> = _library.asStateFlow()
+
+    private val _searchResults = MutableStateFlow<List<Track>>(emptyList())
+    val searchResults: StateFlow<List<Track>> = _searchResults.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    var musicSource: MusicSource? = null
+        private set
+
+    val standalone: StandaloneMusicSource by lazy { StandaloneMusicSource(application) }
+
+    init {
+        StandaloneMusicSourceHolder.instance = standalone
+        player.connect()
+        viewModelScope.launch {
+            val onboarded = prefs.onboarded.first()
+            if (!onboarded) {
+                _state.value = RootUiState.Onboarding
+                return@launch
+            }
+            when (prefs.mode.first()) {
+                AppMode.STANDALONE -> activateStandalone()
+                AppMode.LINKED -> {
+                    val url = prefs.currentServerUrlOrNull()
+                    if (url == null) _state.value = RootUiState.Onboarding
+                    else activateLinked(url)
+                }
+                AppMode.UNSET -> _state.value = RootUiState.Onboarding
+            }
+        }
+    }
+
+    fun chooseStandalone() {
+        viewModelScope.launch {
+            prefs.setStandalone()
+            activateStandalone()
+        }
+    }
+
+    /** §56.4 : test /api/health obligatoire avant d'accepter un serveur — jamais
+     * de confiance aveugle dans l'URL saisie par l'utilisateur. */
+    suspend fun testServer(url: String): Boolean {
+        val candidate = ServerMusicSource(url, null)
+        return candidate.health()
+    }
+
+    fun chooseLinked(url: String) {
+        viewModelScope.launch {
+            _busy.value = true
+            _error.value = null
+            val ok = testServer(url)
+            if (!ok) {
+                _error.value = "Ce serveur ne répond pas comme un serveur MuzziQ."
+                _busy.value = false
+                return@launch
+            }
+            prefs.setLinked(url)
+            activateLinked(url)
+            _busy.value = false
+        }
+    }
+
+    private suspend fun activateStandalone() {
+        musicSource = standalone
+        MusicSourceLocator.set(standalone)
+        _state.value = RootUiState.Ready(AppMode.STANDALONE)
+        refreshLibrary()
+    }
+
+    private suspend fun activateLinked(url: String) {
+        val cookie = prefs.sessionCookie.first()
+        val source = ServerMusicSource(url, cookie)
+        musicSource = source
+        MusicSourceLocator.set(source)
+        _state.value = RootUiState.Ready(AppMode.LINKED)
+        refreshLibrary()
+    }
+
+    fun rescanStandaloneLibrary() {
+        viewModelScope.launch {
+            _busy.value = true
+            standalone.rescan()
+            refreshLibrary()
+            _busy.value = false
+        }
+    }
+
+    fun refreshLibrary() {
+        val source = musicSource ?: return
+        viewModelScope.launch {
+            source.library().onSuccess { _library.value = it }
+                .onFailure { _error.value = it.message }
+        }
+    }
+
+    fun search(query: String) {
+        val source = musicSource ?: return
+        if (query.isBlank()) { _searchResults.value = emptyList(); return }
+        viewModelScope.launch {
+            source.search(query).onSuccess { _searchResults.value = it }
+                .onFailure { _error.value = it.message }
+        }
+    }
+
+    fun play(track: Track) {
+        val source = musicSource ?: return
+        player.play(track, source)
+    }
+
+    /** Bascule mode Lié → autre serveur, ou retour au choix (§56.4). Ne supprime jamais
+     * la bibliothèque locale standalone en repassant en mode Lié. */
+    fun backToOnboarding() {
+        viewModelScope.launch {
+            prefs.resetMode()
+            _state.value = RootUiState.Onboarding
+        }
+    }
+
+    /** Migration Standalone → Lié (§56.4) — événement ponctuel, jamais silencieux. */
+    suspend fun migrateStandaloneTo(url: String): MigrationManager.SyncReport {
+        val cookie = prefs.sessionCookie.first()
+        return MigrationManager(standalone).migrateTo(url, cookie)
+    }
+
+    override fun onCleared() {
+        player.release()
+        super.onCleared()
+    }
+}

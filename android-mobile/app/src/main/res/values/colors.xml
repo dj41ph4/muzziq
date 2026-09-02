@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Palette reprise du serveur web (src/app/globals.css) — même identité de marque. -->
+    <color name="brand">#1ED760</color>
+    <color name="brand_2">#17B850</color>
+    <color name="bg">#0A0A0C</color>
+    <color name="bg_elevated">#0F0F12</color>
+    <color name="text_primary">#F5F7F5</color>
+    <color name="text_muted">#9AA09A</color>
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MuzziQ</string>
+    <string name="onboarding_title">Bienvenue sur MuzziQ</string>
+    <string name="onboarding_subtitle">Choisis comment tu veux écouter — les deux modes fonctionnent pleinement.</string>
+    <string name="onboarding_standalone_title">Local (standalone)</string>
+    <string name="onboarding_standalone_desc">Ta bibliothèque sur cet appareil, aucun compte, aucun serveur. Le lecteur, le moteur de goût et les téléchargements tournent entièrement sur le téléphone.</string>
+    <string name="onboarding_linked_title">Se connecter à un serveur</string>
+    <string name="onboarding_linked_desc">Rejoins un serveur MuzziQ existant pour son catalogue, ses recommandations et son acquisition automatisée.</string>
+    <string name="onboarding_server_url_hint">https://muzziq.exemple.com</string>
+    <string name="onboarding_test_connection">Tester la connexion</string>
+    <string name="onboarding_continue">Continuer</string>
+    <string name="update_available">Mise à jour disponible</string>
+    <string name="update_download">Télécharger</string>
+</resources>

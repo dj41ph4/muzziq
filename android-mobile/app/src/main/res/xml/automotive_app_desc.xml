@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Déclare l'app comme lecteur média pour Android Auto (§56.2) — la navigation
+     réelle est servie par PlaybackService (MediaLibraryService), pas par cette
+     déclaration qui ne fait qu'annoncer la capacité. -->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>

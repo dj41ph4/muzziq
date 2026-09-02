@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Le mode Lié (§56.4) cible un serveur auto-hébergé par l'utilisateur, souvent
+     sur un réseau local sans certificat public (ex. http://192.168.x.x:9910).
+     cleartext autorisé uniquement pour ce cas d'usage explicite — jamais un
+     assouplissement générique côté requêtes vers Internet public. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple note stylisée, couleur de marque MuzziQ (#1ED760) — pas un asset copié. -->
+    <path
+        android:fillColor="#1ED760"
+        android:pathData="M54,24 C40,24 29,35 29,49 C29,63 40,74 54,74 C63,74 71,68 74,60 L74,84 C74,89 78,93 83,93 C88,93 92,89 92,84 L92,30 C92,26 89,24 85,24 L54,24 Z M54,66 C44,66 37,58.5 37,49 C37,39.5 44,32 54,32 C64,32 71,39.5 71,49 C71,58.5 64,66 54,66 Z" />
+</vector>
