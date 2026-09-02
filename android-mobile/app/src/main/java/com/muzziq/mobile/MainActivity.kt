@@ -115,6 +115,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             val isPlaying by vm.player.isPlaying.collectAsStateWithLifecycle()
             val positionMs by vm.player.positionMs.collectAsStateWithLifecycle()
             val durationMs by vm.player.durationMs.collectAsStateWithLifecycle()
+            val favoriteIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
 
             LaunchedEffect(currentTrack) {
                 while (currentTrack != null) {
@@ -189,6 +190,8 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             onCollapse = { expanded = false },
                             onSkipNext = { vm.player.skipNext() },
                             onSkipPrevious = { vm.player.skipPrevious() },
+                            isFavorite = track.id in favoriteIds,
+                            onToggleFavorite = { vm.toggleFavorite(track) },
                         )
                     }
                 }

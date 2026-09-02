@@ -14,15 +14,19 @@ import com.muzziq.mobile.core.capabilities.CapabilityManager
 import com.muzziq.mobile.core.capabilities.MuzziQCapabilities
 import com.muzziq.mobile.core.capabilities.ServerConnectionState
 import com.muzziq.mobile.data.model.Track
+import com.muzziq.mobile.domain.RoomFavoriteRepository
 import com.muzziq.mobile.playback.MusicSourceLocator
 import com.muzziq.mobile.playback.PlayerController
 import com.muzziq.mobile.standalone.MigrationManager
 import com.muzziq.mobile.standalone.StandaloneMusicSource
 import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 sealed interface RootUiState {
@@ -61,6 +65,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     val standalone: StandaloneMusicSource by lazy { StandaloneMusicSource(application) }
     private val queueStateStore by lazy { QueueStateStore(application) }
+
+    /** Favoris — Room, indépendants du mode (§56.4) et du serveur. Premier vrai
+     * consommateur du schéma Room posé plus tôt (data/room/). */
+    private val favorites: RoomFavoriteRepository by lazy { RoomFavoriteRepository(application) }
+    val favoriteTrackIds: StateFlow<Set<String>> = favorites.observeFavorites()
+        .map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    fun toggleFavorite(track: Track) {
+        viewModelScope.launch {
+            val isFav = favorites.isFavorite(track.id)
+            favorites.setFavorite(track.id, !isFav)
+        }
+    }
 
     init {
         StandaloneMusicSourceHolder.instance = standalone

@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -116,6 +118,8 @@ fun SharedTransitionScope.PlayerScreen(
     onCollapse: () -> Unit,
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
 ) {
     val dominant = rememberDominantColor(track.artworkUrl)
     val animatedDominant by animateFloatAsState(targetValue = 1f, animationSpec = tween(600), label = "grad")
@@ -151,9 +155,21 @@ fun SharedTransitionScope.PlayerScreen(
                 )
             }
 
-            Column(Modifier.padding(top = 32.dp)) {
-                Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(track.artist, color = MuzziQColors.TextMuted, fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+            Row(Modifier.padding(top = 32.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(track.artist, color = MuzziQColors.TextMuted, fontSize = 15.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                // Favoris Room (§56.4) — indépendant du mode et du blocage cipher YouTube,
+                // fonctionne identiquement en standalone et en lié, jamais un bouton mort :
+                // toggleFavorite() écrit réellement dans la base locale.
+                IconButton(onClick = onToggleFavorite) {
+                    Icon(
+                        if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Retirer des favoris" else "Ajouter aux favoris",
+                        tint = if (isFavorite) MuzziQColors.Brand else MuzziQColors.TextMuted,
+                    )
+                }
             }
 
             var sliderPosition by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(positionMs.toFloat()) }
