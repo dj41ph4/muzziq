@@ -166,9 +166,9 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                     },
                 ) { padding ->
                     when (Tab.entries[tab]) {
-                        Tab.HOME -> HomeScreen(s.mode, library, padding) { vm.play(it) }
-                        Tab.SEARCH -> SearchScreen(s.mode, query, { query = it; vm.search(it) }, searchResults, padding) { vm.play(it) }
-                        Tab.LIBRARY -> LibraryScreen(s.mode, library, busy, padding, onRescan = { vm.rescanStandaloneLibrary() }) { vm.play(it) }
+                        Tab.HOME -> HomeScreen(s.mode, library, padding) { vm.playFrom(library, it) }
+                        Tab.SEARCH -> SearchScreen(s.mode, query, { query = it; vm.search(it) }, searchResults, padding) { vm.playFrom(searchResults, it) }
+                        Tab.LIBRARY -> LibraryScreen(s.mode, library, busy, padding, onRescan = { vm.rescanStandaloneLibrary() }) { vm.playFrom(library, it) }
                     }
                 }
 
@@ -187,6 +187,8 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             onTogglePlayPause = { vm.player.togglePlayPause() },
                             onSeek = { vm.player.seekTo(it) },
                             onCollapse = { expanded = false },
+                            onSkipNext = { vm.player.skipNext() },
+                            onSkipPrevious = { vm.player.skipPrevious() },
                         )
                     }
                 }

@@ -114,6 +114,8 @@ fun SharedTransitionScope.PlayerScreen(
     onTogglePlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
     onCollapse: () -> Unit,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit,
 ) {
     val dominant = rememberDominantColor(track.artworkUrl)
     val animatedDominant by animateFloatAsState(targetValue = 1f, animationSpec = tween(600), label = "grad")
@@ -175,7 +177,12 @@ fun SharedTransitionScope.PlayerScreen(
                 horizontalArrangement = Arrangement.spacedBy(32.dp, alignment = Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Rounded.SkipPrevious, contentDescription = null, tint = MuzziQColors.TextMuted, modifier = Modifier.size(36.dp))
+                Icon(
+                    Icons.Rounded.SkipPrevious,
+                    contentDescription = "Précédent",
+                    tint = MuzziQColors.TextMuted,
+                    modifier = Modifier.size(36.dp).clickable(onClick = onSkipPrevious),
+                )
                 // Le bouton play/pause "morph" (§56.1) — micro-animation discrète via
                 // un simple crossfade d'icône plutôt qu'un vrai path-morph vectoriel,
                 // suffisant en V1 sans lib d'animation vectorielle supplémentaire.
@@ -194,7 +201,12 @@ fun SharedTransitionScope.PlayerScreen(
                         modifier = Modifier.size(32.dp),
                     )
                 }
-                Icon(Icons.Rounded.SkipNext, contentDescription = null, tint = MuzziQColors.TextMuted, modifier = Modifier.size(36.dp))
+                Icon(
+                    Icons.Rounded.SkipNext,
+                    contentDescription = "Suivant",
+                    tint = MuzziQColors.TextMuted,
+                    modifier = Modifier.size(36.dp).clickable(onClick = onSkipNext),
+                )
             }
         }
     }

@@ -42,6 +42,15 @@ class PlaybackService : MediaLibraryService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var currentTrack: Track? = null
 
+    // Queue logique (plan §40) : liste de Track + index courant. Volontairement PAS une
+    // playlist Media3 multi-MediaItem — chaque morceau n'est résolu (resolvePlayableUri,
+    // potentiellement un appel réseau côté serveur) qu'au moment où il devient courant,
+    // jamais toute la file à l'avance. Limite assumée : pas de gapless entre morceaux
+    // (un vrai preload du morceau suivant est un chantier séparé).
+    private var queue: List<Track> = emptyList()
+    private var queueIndex: Int = -1
+    private var queueSource: MusicSource? = null
+
     override fun onCreate() {
         super.onCreate()
         val httpDataSourceFactory = OkHttpDataSource.Factory(okhttp3.OkHttpClient())
@@ -61,7 +70,10 @@ class PlaybackService : MediaLibraryService() {
 
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) recordAffinity(completed = true)
+                if (state == Player.STATE_ENDED) {
+                    recordAffinity(completed = true)
+                    if (hasNext()) skipNext()
+                }
             }
         })
 
@@ -80,30 +92,70 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = mediaSession
 
-    /** Résout et joue un [Track] via la source musicale active (serveur OU standalone),
-     * appelé depuis l'UI (mini-player, écrans de liste) plutôt que de manipuler
-     * directement le player — la résolution d'URL doit toujours passer par ici. */
+    /** Résout et joue un [Track] isolé (pas de file autour) — utilisé quand l'appelant ne
+     * fournit pas de contexte de liste. Préférer [playQueue] depuis l'UI dès qu'une liste
+     * existe (Home/Recherche/Bibliothèque), pour que Suivant/Précédent fonctionnent. */
     fun playTrack(track: Track, source: MusicSource) {
-        scope.launch {
-            recordAffinity(completed = false)
-            val result = source.resolvePlayableUri(track)
-            val url = result.getOrNull() ?: return@launch
-            currentTrack = track
-            val metadata = MediaMetadata.Builder()
-                .setTitle(track.title)
-                .setArtist(track.artist)
-                .setAlbumTitle(track.album)
-                .setArtworkUri(track.artworkUrl?.let { android.net.Uri.parse(it) })
-                .build()
-            val mediaItem = MediaItem.Builder()
-                .setUri(url)
-                .setMediaId(track.id)
-                .setMediaMetadata(metadata)
-                .build()
-            player.setMediaItem(mediaItem)
-            player.prepare()
-            player.playWhenReady = true
-        }
+        queue = listOf(track)
+        queueIndex = 0
+        queueSource = source
+        scope.launch { resolveAndPlay(track, source) }
+    }
+
+    /** File d'attente réelle (§40) : joue [tracks]\[startIndex\] et retient le contexte pour
+     * que [skipNext]/[skipPrevious] avancent dans la même liste — c'est ce qui rend les
+     * boutons Suivant/Précédent du plein écran fonctionnels plutôt que décoratifs. */
+    fun playQueue(tracks: List<Track>, startIndex: Int, source: MusicSource) {
+        if (tracks.isEmpty()) return
+        queue = tracks
+        queueIndex = startIndex.coerceIn(0, tracks.lastIndex)
+        queueSource = source
+        scope.launch { resolveAndPlay(queue[queueIndex], source) }
+    }
+
+    fun skipNext() {
+        val source = queueSource ?: return
+        if (queue.isEmpty() || queueIndex >= queue.lastIndex) return
+        queueIndex += 1
+        scope.launch { resolveAndPlay(queue[queueIndex], source) }
+    }
+
+    fun skipPrevious() {
+        val source = queueSource ?: return
+        if (queue.isEmpty() || queueIndex <= 0) return
+        queueIndex -= 1
+        scope.launch { resolveAndPlay(queue[queueIndex], source) }
+    }
+
+    fun hasNext(): Boolean = queueIndex in 0 until queue.lastIndex
+    fun hasPrevious(): Boolean = queueIndex > 0
+
+    /** Lu par PlayerController après une transition (manuelle ou automatique en fin de
+     * morceau) pour resynchroniser l'UI — le service reste la seule source de vérité sur
+     * "que joue-t-on", jamais dupliquée côté UI (§56.4). */
+    fun currentTrackOrNull(): Track? = currentTrack
+
+    /** Résolution + lecture réelle — la seule voie qui touche [player.setMediaItem], appelée
+     * depuis [playTrack]/[playQueue]/[skipNext]/[skipPrevious], jamais dupliquée ailleurs. */
+    private suspend fun resolveAndPlay(track: Track, source: MusicSource) {
+        recordAffinity(completed = false)
+        val result = source.resolvePlayableUri(track)
+        val url = result.getOrNull() ?: return
+        currentTrack = track
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.artist)
+            .setAlbumTitle(track.album)
+            .setArtworkUri(track.artworkUrl?.let { android.net.Uri.parse(it) })
+            .build()
+        val mediaItem = MediaItem.Builder()
+            .setUri(url)
+            .setMediaId(track.id)
+            .setMediaMetadata(metadata)
+            .build()
+        player.setMediaItem(mediaItem)
+        player.prepare()
+        player.playWhenReady = true
     }
 
     private fun recordAffinity(completed: Boolean) {

@@ -2,6 +2,7 @@ package com.muzziq.mobile.playback
 
 import android.content.ComponentName
 import android.content.Context
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -45,17 +46,41 @@ class PlayerController(context: Context) {
                 override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
                     _durationMs.value = controller?.duration?.coerceAtLeast(0) ?: 0L
                 }
+                override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                    // Se resynchronise sur le service — couvre à la fois un skip manuel
+                    // (skipNext/skipPrevious) et l'avance automatique en fin de morceau
+                    // (STATE_ENDED côté PlaybackService), les deux chemins passant par
+                    // resolveAndPlay() côté service.
+                    _currentTrack.value = PlaybackServiceBridge.instanceOrNull()?.currentTrackOrNull()
+                }
             })
             onReady()
         }, MoreExecutors.directExecutor())
     }
 
+    /** Lecture d'un morceau isolé, sans file autour (pas de Suivant/Précédent utile). */
     fun play(track: Track, source: MusicSource) {
         _currentTrack.value = track
-        // La résolution + le chargement réel du média se font côté service, seule
-        // source de vérité sur "que joue-t-on" (§56.4 : même pipeline standalone/lié).
         val service = PlaybackServiceBridge.instanceOrNull() ?: return
         service.playTrack(track, source)
+    }
+
+    /** Lecture avec file d'attente réelle (§40) — [tracks] est le contexte visible dans
+     * l'UI au moment du tap (résultats de recherche, bibliothèque…), [startIndex] le
+     * morceau cliqué. Rend Suivant/Précédent fonctionnels. */
+    fun playQueue(tracks: List<Track>, startIndex: Int, source: MusicSource) {
+        if (tracks.isEmpty()) return
+        _currentTrack.value = tracks[startIndex.coerceIn(0, tracks.lastIndex)]
+        val service = PlaybackServiceBridge.instanceOrNull() ?: return
+        service.playQueue(tracks, startIndex, source)
+    }
+
+    fun skipNext() {
+        PlaybackServiceBridge.instanceOrNull()?.skipNext()
+    }
+
+    fun skipPrevious() {
+        PlaybackServiceBridge.instanceOrNull()?.skipPrevious()
     }
 
     fun togglePlayPause() {

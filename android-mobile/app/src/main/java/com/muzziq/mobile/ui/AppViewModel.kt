@@ -166,6 +166,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         player.play(track, source)
     }
 
+    /** À utiliser depuis les écrans de liste (Home/Recherche/Bibliothèque) : [tracks] est
+     * le contexte visible au moment du tap, [clicked] le morceau choisi — alimente la
+     * file d'attente réelle (§40) pour que Suivant/Précédent fonctionnent depuis le
+     * plein écran, plutôt qu'un play() isolé sans contexte. */
+    fun playFrom(tracks: List<Track>, clicked: Track) {
+        val source = musicSource ?: return
+        val startIndex = tracks.indexOfFirst { it.id == clicked.id }.let { if (it >= 0) it else 0 }
+        player.playQueue(tracks, startIndex, source)
+    }
+
     /** Bascule mode Lié → autre serveur, ou retour au choix (§56.4). Ne supprime jamais
      * la bibliothèque locale standalone en repassant en mode Lié. */
     fun backToOnboarding() {
