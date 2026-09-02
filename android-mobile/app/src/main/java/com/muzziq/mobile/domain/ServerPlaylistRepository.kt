@@ -7,7 +7,7 @@ import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
 
 /**
- * Playlists mode Lié — consomme les routes serveur réelles (src/app/api/playlists/*),
+ * Playlists mode Lié — consomme les routes serveur réelles sous src/app/api/playlists,
  * jamais un contrat inventé (§64) : GET/POST /api/playlists, GET/DELETE /api/playlists/{id},
  * POST /api/playlists/{id}/items, DELETE /api/playlists/{id}/items?itemId=.
  */
