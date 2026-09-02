@@ -14,10 +14,13 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -26,8 +29,10 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -44,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.muzziq.mobile.BuildConfig
 import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.ui.AppViewModel
 import com.muzziq.mobile.ui.RootUiState
@@ -55,6 +61,7 @@ import com.muzziq.mobile.ui.player.MiniPlayer
 import com.muzziq.mobile.ui.player.PlayerScreen
 import com.muzziq.mobile.ui.playlists.PlaylistsScreen
 import com.muzziq.mobile.ui.search.SearchScreen
+import com.muzziq.mobile.ui.settings.SettingsScreen
 import com.muzziq.mobile.ui.theme.MuzziQColors
 import com.muzziq.mobile.ui.theme.MuzziQTheme
 import kotlinx.coroutines.delay
@@ -135,7 +142,9 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             val openPlaylistId by vm.openPlaylistId.collectAsStateWithLifecycle()
             val playlistTracks by vm.playlistTracks.collectAsStateWithLifecycle()
             val history by vm.history.collectAsStateWithLifecycle()
+            val serverUrl by vm.serverUrl.collectAsStateWithLifecycle()
             var showPlaylistPicker by remember { mutableStateOf(false) }
+            var showSettings by remember { mutableStateOf(false) }
 
             LaunchedEffect(currentTrack) {
                 while (currentTrack != null) {
@@ -147,6 +156,16 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             SharedTransitionLayout {
                 Scaffold(
                     containerColor = MuzziQColors.Bg,
+                    topBar = {
+                        Row(
+                            Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            IconButton(onClick = { showSettings = true }) {
+                                Icon(Icons.Rounded.Settings, contentDescription = "Réglages", tint = MuzziQColors.TextMuted)
+                            }
+                        }
+                    },
                     bottomBar = {
                         Column {
                             currentTrack?.let { track ->
@@ -288,6 +307,19 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             )
                         },
                         containerColor = MuzziQColors.Surface,
+                    )
+                }
+
+                if (showSettings) {
+                    SettingsScreen(
+                        mode = s.mode,
+                        serverUrl = serverUrl,
+                        appVersion = BuildConfig.VERSION_NAME,
+                        onClose = { showSettings = false },
+                        onChangeMode = {
+                            showSettings = false
+                            vm.backToOnboarding()
+                        },
                     )
                 }
             }

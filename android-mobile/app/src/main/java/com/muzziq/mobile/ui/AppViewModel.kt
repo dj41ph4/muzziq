@@ -197,6 +197,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _serverConnectionState = MutableStateFlow(ServerConnectionState.DISCONNECTED)
     val serverConnectionState: StateFlow<ServerConnectionState> = _serverConnectionState.asStateFlow()
+
+    /** Affiché dans l'écran Réglages (§56.4) — l'utilisateur doit pouvoir voir à quel
+     * serveur il est connecté, et en changer, sans réinstaller l'app. */
+    val serverUrl: StateFlow<String?> = prefs.serverUrl
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     private val _capabilities = MutableStateFlow(capabilityManager.forConnection(ServerConnectionState.DISCONNECTED))
     val capabilities: StateFlow<MuzziQCapabilities> = _capabilities.asStateFlow()
 
