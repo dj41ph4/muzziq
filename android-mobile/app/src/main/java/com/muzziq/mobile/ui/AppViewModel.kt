@@ -40,6 +40,13 @@ sealed interface RootUiState {
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
+    // Le paramètre de constructeur `application` (sans val) n'est capturé que dans les
+    // initializers de propriété/blocs `by lazy` — pas dans le corps des fonctions membres
+    // (activateLinked, etc.), où l'identifiant se résout silencieusement vers le champ
+    // privé `application` hérité d'AndroidViewModel → erreur d'accès. Bug réel trouvé par
+    // le run CI (compileReleaseKotlin, "it is private in androidx/lifecycle/AndroidViewModel")
+    // avant ce correctif — d'où cette propriété explicite, utilisable partout dans la classe.
+    private val appContext: Application = application
     private val prefs = AppPrefs(application)
     private val capabilityManager = CapabilityManager()
     val player = PlayerController(application)
@@ -180,11 +187,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun activateLinked(url: String) {
         val cookie = prefs.sessionCookie.first()
-        val downloadDao = MuzziQDatabase.get(application).downloadDao()
+        val downloadDao = MuzziQDatabase.get(appContext).downloadDao()
         val source = ServerMusicSource(url, cookie, downloadDao)
         musicSource = source
         MusicSourceLocator.set(source)
-        downloadRepository = ServerDownloadRepository(application, source)
+        downloadRepository = ServerDownloadRepository(appContext, source)
         _state.value = RootUiState.Ready(AppMode.LINKED)
         refreshLibrary()
         refreshServerCapabilities(url)
