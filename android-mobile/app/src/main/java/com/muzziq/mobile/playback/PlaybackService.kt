@@ -297,6 +297,11 @@ class PlaybackService : MediaLibraryService() {
                 val track = browseTrackCache[item.mediaId]
                 val url = if (track != null && source != null) source.resolvePlayableUri(track).getOrNull() else null
                 if (track != null && url != null) {
+                    // Même ordre que resolveAndPlay() : enregistre l'écoute partielle du
+                    // morceau sortant AVANT de basculer currentTrack — sans ça, une lecture
+                    // démarrée depuis Android Auto ne laissait aucune trace de "début
+                    // d'écoute" côté historique/affinité (écart réel, corrigé ici).
+                    recordAffinity(completed = false)
                     queue = listOf(track)
                     queueIndex = 0
                     queueSource = source
