@@ -16,8 +16,12 @@ import com.muzziq.mobile.core.capabilities.ServerConnectionState
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.room.MuzziQDatabase
 import com.muzziq.mobile.domain.DownloadRepository
+import com.muzziq.mobile.domain.PlaylistRepository
+import com.muzziq.mobile.domain.PlaylistSummary
 import com.muzziq.mobile.domain.RoomFavoriteRepository
+import com.muzziq.mobile.domain.RoomPlaylistRepository
 import com.muzziq.mobile.domain.ServerDownloadRepository
+import com.muzziq.mobile.domain.ServerPlaylistRepository
 import com.muzziq.mobile.domain.StandaloneDownloadRepository
 import com.muzziq.mobile.playback.MusicSourceLocator
 import com.muzziq.mobile.playback.PlayerController
@@ -119,6 +123,85 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Playlists (plan §6/§66) — RoomPlaylistRepository en standalone, ServerPlaylistRepository
+     * en mode Lié, choisi/instancié dans activateStandalone/activateLinked comme les
+     * téléchargements. */
+    private var playlistRepository: PlaylistRepository? = null
+    private val _playlists = MutableStateFlow<List<PlaylistSummary>>(emptyList())
+    val playlists: StateFlow<List<PlaylistSummary>> = _playlists.asStateFlow()
+    private val _playlistTracks = MutableStateFlow<List<Track>>(emptyList())
+    val playlistTracks: StateFlow<List<Track>> = _playlistTracks.asStateFlow()
+    private val _openPlaylistId = MutableStateFlow<String?>(null)
+    val openPlaylistId: StateFlow<String?> = _openPlaylistId.asStateFlow()
+
+    fun refreshPlaylists() {
+        val repo = playlistRepository ?: return
+        viewModelScope.launch {
+            repo.playlists().onSuccess { _playlists.value = it }.onFailure { _error.value = it.message }
+        }
+    }
+
+    fun createPlaylist(name: String) {
+        val repo = playlistRepository ?: return
+        if (name.isBlank()) return
+        viewModelScope.launch {
+            repo.createPlaylist(name.trim())
+                .onSuccess { refreshPlaylists() }
+                .onFailure { _error.value = it.message }
+        }
+    }
+
+    fun deletePlaylist(playlistId: String) {
+        val repo = playlistRepository ?: return
+        viewModelScope.launch {
+            repo.deletePlaylist(playlistId)
+                .onSuccess {
+                    if (_openPlaylistId.value == playlistId) closePlaylist()
+                    refreshPlaylists()
+                }
+                .onFailure { _error.value = it.message }
+        }
+    }
+
+    fun openPlaylist(playlistId: String) {
+        val repo = playlistRepository ?: return
+        _openPlaylistId.value = playlistId
+        viewModelScope.launch {
+            repo.playlistTracks(playlistId)
+                .onSuccess { _playlistTracks.value = it }
+                .onFailure { _error.value = it.message }
+        }
+    }
+
+    fun closePlaylist() {
+        _openPlaylistId.value = null
+        _playlistTracks.value = emptyList()
+    }
+
+    fun addToPlaylist(playlistId: String, track: Track) {
+        val repo = playlistRepository ?: return
+        viewModelScope.launch {
+            repo.addTrackToPlaylist(playlistId, track)
+                .onSuccess {
+                    if (_openPlaylistId.value == playlistId) openPlaylist(playlistId)
+                    refreshPlaylists()
+                }
+                .onFailure { _error.value = it.message }
+        }
+    }
+
+    fun removeFromPlaylist(playlistId: String, trackId: String) {
+        val repo = playlistRepository ?: return
+        viewModelScope.launch {
+            repo.removeTrackFromPlaylist(playlistId, trackId)
+                .onSuccess {
+                    if (_openPlaylistId.value == playlistId) openPlaylist(playlistId)
+                    refreshPlaylists()
+                }
+                .onFailure { _error.value = it.message }
+        }
+    }
+
     init {
         StandaloneMusicSourceHolder.instance = standalone
         player.connect()
@@ -179,9 +262,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         musicSource = standalone
         MusicSourceLocator.set(standalone)
         downloadRepository = StandaloneDownloadRepository(standalone)
+        playlistRepository = RoomPlaylistRepository(appContext)
         _state.value = RootUiState.Ready(AppMode.STANDALONE)
         refreshLibrary()
         refreshDownloads()
+        refreshPlaylists()
         restorePersistedQueue()
     }
 
@@ -192,10 +277,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         musicSource = source
         MusicSourceLocator.set(source)
         downloadRepository = ServerDownloadRepository(appContext, source)
+        playlistRepository = ServerPlaylistRepository(url, cookie)
         _state.value = RootUiState.Ready(AppMode.LINKED)
         refreshLibrary()
         refreshServerCapabilities(url)
         refreshDownloads()
+        refreshPlaylists()
         restorePersistedQueue()
     }
 

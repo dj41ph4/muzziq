@@ -75,8 +75,16 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlists ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<PlaylistEntity>>
 
+    /** Instantané suspend — cf. DownloadDao.getAllOnce(), même besoin (rafraîchir un
+     * StateFlow après une action plutôt qu'observer en continu). */
+    @Query("SELECT * FROM playlists ORDER BY createdAt DESC")
+    suspend fun getAllOnce(): List<PlaylistEntity>
+
     @Delete
     suspend fun delete(playlist: PlaylistEntity)
+
+    @Query("DELETE FROM playlists WHERE id = :playlistId")
+    suspend fun deleteById(playlistId: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItem(item: PlaylistItemEntity)
@@ -84,8 +92,17 @@ interface PlaylistDao {
     @Query("DELETE FROM playlist_items WHERE playlistId = :playlistId AND trackId = :trackId")
     suspend fun removeItem(playlistId: String, trackId: String)
 
+    @Query("DELETE FROM playlist_items WHERE playlistId = :playlistId")
+    suspend fun clearItems(playlistId: String)
+
     @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId ORDER BY position")
     fun observeItems(playlistId: String): Flow<List<PlaylistItemEntity>>
+
+    @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId ORDER BY position")
+    suspend fun getItemsOnce(playlistId: String): List<PlaylistItemEntity>
+
+    @Query("SELECT COUNT(*) FROM playlist_items WHERE playlistId = :playlistId")
+    suspend fun itemCount(playlistId: String): Int
 }
 
 @Dao

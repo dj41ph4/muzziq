@@ -140,6 +140,31 @@ data class Playlist(
 @JsonClass(generateAdapter = true)
 data class PlaylistsResponse(val playlists: List<Playlist>)
 
+@JsonClass(generateAdapter = true)
+data class CreatePlaylistRequest(val name: String)
+
+/** Reflet de GET /api/playlists/{id} — src/app/api/playlists/[id]/route.ts. */
+@JsonClass(generateAdapter = true)
+data class PlaylistDetailResponse(
+    val id: String,
+    val name: String,
+    val createdAt: String,
+    val items: List<PlaylistItemDto> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class PlaylistItemDto(
+    val id: String,
+    val playlistId: String,
+    val recordingId: String,
+    val position: Int,
+    val addedAt: String,
+    val recording: Recording? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class AddPlaylistItemRequest(val recordingId: String)
+
 /** Réponse de GET /api/recordings/{id}/resolve — jamais un flux fabriqué côté client. */
 @JsonClass(generateAdapter = true)
 data class ResolvedPlayback(

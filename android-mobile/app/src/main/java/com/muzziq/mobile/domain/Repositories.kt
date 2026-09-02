@@ -40,14 +40,28 @@ interface LibraryRepository {
     suspend fun library(): Result<List<Track>>
 }
 
+data class PlaylistSummary(val id: String, val name: String, val itemCount: Int)
+
+/**
+ * Playlists (plan §6/§66) — standalone (Room, RoomPlaylistRepository) et mode Lié
+ * (serveur, ServerPlaylistRepository) sont deux implémentations réelles et complètes,
+ * pas juste un contrat posé sans classe (contrairement à Lyrics/Recommendation
+ * ci-dessous). Contrat volontairement plus riche qu'un simple `List<String>` de noms —
+ * la version précédente ne permettait ni de lister le contenu d'une playlist, ni d'y
+ * ajouter/retirer un morceau, donc rien d'utile à construire dessus.
+ */
 interface PlaylistRepository {
-    suspend fun playlists(): Result<List<String>>
+    suspend fun playlists(): Result<List<PlaylistSummary>>
+    suspend fun createPlaylist(name: String): Result<PlaylistSummary>
+    suspend fun deletePlaylist(playlistId: String): Result<Unit>
+    suspend fun playlistTracks(playlistId: String): Result<List<Track>>
+    suspend fun addTrackToPlaylist(playlistId: String, track: Track): Result<Unit>
+    suspend fun removeTrackFromPlaylist(playlistId: String, trackId: String): Result<Unit>
 }
 
-/** Pas encore implémenté nulle part (ni Room ni serveur consommé côté Android) —
- * contrat posé pour la prochaine étape, aucune classe ne l'implémente ici. Le
- * server contract existe (`/api/library/items` avec addPolicy) mais Android ne
- * l'expose pas encore comme "favori" au sens strict. */
+/** Implémenté par RoomFavoriteRepository (Room, local à l'appareil, mêmes deux modes) —
+ * pas de synchronisation serveur (le contrat serveur, `/api/library/items` + addPolicy,
+ * n'est pas un concept de favori au sens strict). */
 interface FavoriteRepository {
     suspend fun isFavorite(trackId: String): Boolean
     suspend fun setFavorite(trackId: String, favorite: Boolean)
@@ -74,9 +88,9 @@ interface RecommendationProvider {
     suspend fun recommendationsFor(seed: Track?): Result<List<Track>>
 }
 
-/** Pas implémenté — le concept de "téléchargement offline d'un morceau distant"
- * (plan §57, DeviceOfflineItem) n'existe pas encore ; en standalone, tout morceau de
- * la bibliothèque locale est déjà un fichier sur l'appareil (rien à télécharger). */
+/** Téléchargement hors-ligne (plan §57, DeviceOfflineItem) — deux implémentations réelles :
+ * StandaloneDownloadRepository (un morceau local EST déjà téléchargé par définition) et
+ * ServerDownloadRepository (rapatrie réellement les octets d'un morceau serveur). */
 interface DownloadRepository {
     suspend fun downloadedTrackIds(): Result<List<String>>
     suspend fun requestDownload(track: Track): Result<Unit>

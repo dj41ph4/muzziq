@@ -72,6 +72,14 @@ data class PlaylistEntity(
     val createdAt: Long,
 )
 
+/**
+ * Morceau dénormalisé directement dans l'item (titre/artiste/pochette/source) plutôt
+ * que référencé via TrackDao/TrackEntity : ces deux dernières tables ne sont alimentées
+ * par personne aujourd'hui (StandaloneMusicSource garde sa propre table SQLite,
+ * data/room/ n'est pas encore la source de vérité de la bibliothèque, voir le
+ * commentaire en tête de ce fichier). Dénormaliser évite de dépendre d'un système de
+ * synchronisation Track↔Room qui n'existe pas encore réellement.
+ */
 @Entity(
     tableName = "playlist_items",
     indices = [Index("playlistId"), Index("trackId")],
@@ -81,6 +89,14 @@ data class PlaylistItemEntity(
     val playlistId: String,
     val trackId: String,
     val position: Int,
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val durationSeconds: Double? = null,
+    val artworkUrl: String? = null,
+    /** "SERVER" | "LOCAL" — reflet de TrackSource, jamais une 3e valeur inventée. */
+    val sourceKind: String,
+    val sourceRef: String,
 )
 
 @Entity(tableName = "favorites")

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
@@ -126,6 +127,7 @@ fun SharedTransitionScope.PlayerScreen(
     isDownloaded: Boolean,
     isDownloading: Boolean,
     onToggleDownload: () -> Unit,
+    onAddToPlaylist: () -> Unit,
 ) {
     val dominant = rememberDominantColor(track.artworkUrl)
     val animatedDominant by animateFloatAsState(targetValue = 1f, animationSpec = tween(600), label = "grad")
@@ -190,6 +192,12 @@ fun SharedTransitionScope.PlayerScreen(
                             tint = if (isDownloaded) MuzziQColors.Brand else MuzziQColors.TextMuted,
                         )
                     }
+                }
+                // Ajout à une playlist (plan §6/§66) — même geste en standalone et en lié,
+                // AppViewModel choisit la bonne implémentation (RoomPlaylistRepository/
+                // ServerPlaylistRepository), le picker vit dans MainActivity.
+                IconButton(onClick = onAddToPlaylist) {
+                    Icon(Icons.Rounded.PlaylistAdd, contentDescription = "Ajouter à une playlist", tint = MuzziQColors.TextMuted)
                 }
             }
 

@@ -1,13 +1,17 @@
 package com.muzziq.mobile.data
 
 import com.muzziq.mobile.data.model.AddLibraryItemRequest
+import com.muzziq.mobile.data.model.AddPlaylistItemRequest
 import com.muzziq.mobile.data.model.AndroidUpdateInfo
+import com.muzziq.mobile.data.model.CreatePlaylistRequest
 import com.muzziq.mobile.data.model.HealthResponse
 import com.muzziq.mobile.data.model.LibraryItemsResponse
 import com.muzziq.mobile.data.model.LoginRequest
 import com.muzziq.mobile.data.model.LoginResponse
 import com.muzziq.mobile.data.model.MeResponse
 import com.muzziq.mobile.data.model.PlayableSource
+import com.muzziq.mobile.data.model.Playlist
+import com.muzziq.mobile.data.model.PlaylistDetailResponse
 import com.muzziq.mobile.data.model.PlaylistsResponse
 import com.muzziq.mobile.data.model.ResolvedPlayback
 import com.muzziq.mobile.data.model.SearchResult
@@ -20,6 +24,7 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
@@ -56,6 +61,29 @@ interface MuzziqApi {
 
     @GET("/api/playlists")
     suspend fun playlists(@Header("Cookie") cookie: String?): Response<PlaylistsResponse>
+
+    @POST("/api/playlists")
+    suspend fun createPlaylist(@Body body: CreatePlaylistRequest, @Header("Cookie") cookie: String?): Response<Playlist>
+
+    @GET("/api/playlists/{id}")
+    suspend fun playlistDetail(@Path("id") id: String, @Header("Cookie") cookie: String?): Response<PlaylistDetailResponse>
+
+    @DELETE("/api/playlists/{id}")
+    suspend fun deletePlaylist(@Path("id") id: String, @Header("Cookie") cookie: String?): Response<Unit>
+
+    @POST("/api/playlists/{id}/items")
+    suspend fun addPlaylistItem(
+        @Path("id") id: String,
+        @Body body: AddPlaylistItemRequest,
+        @Header("Cookie") cookie: String?,
+    ): Response<Unit>
+
+    @DELETE("/api/playlists/{id}/items")
+    suspend fun deletePlaylistItem(
+        @Path("id") id: String,
+        @Query("itemId") itemId: String,
+        @Header("Cookie") cookie: String?,
+    ): Response<Unit>
 
     @GET("/api/recordings/{id}/resolve")
     suspend fun resolveRecording(@Path("id") recordingId: String): Response<ResolvedPlayback>

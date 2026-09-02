@@ -28,9 +28,10 @@ class MusicSourceLibraryAdapter(private val source: MusicSource) : LibraryReposi
     override suspend fun library(): Result<List<Track>> = source.library()
 }
 
-class MusicSourcePlaylistAdapter(private val source: MusicSource) : PlaylistRepository {
-    override suspend fun playlists(): Result<List<String>> = source.playlists()
-}
+// L'ancien MusicSourcePlaylistAdapter (délégant à MusicSource.playlists(): Result<List<String>>)
+// a été retiré : ce contrat ne permettait ni de lister le contenu d'une playlist ni d'y
+// ajouter/retirer un morceau. RoomPlaylistRepository/ServerPlaylistRepository (fichiers
+// dédiés) implémentent maintenant PlaylistRepository directement et réellement.
 
 /** Seule implémentation réelle de HistoryRepository aujourd'hui — le mode Lié n'envoie
  * aucun événement de lecture au serveur depuis Android (pas de route consommée pour ça). */

@@ -17,15 +17,21 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +51,7 @@ import com.muzziq.mobile.ui.library.LibraryScreen
 import com.muzziq.mobile.ui.onboarding.OnboardingScreen
 import com.muzziq.mobile.ui.player.MiniPlayer
 import com.muzziq.mobile.ui.player.PlayerScreen
+import com.muzziq.mobile.ui.playlists.PlaylistsScreen
 import com.muzziq.mobile.ui.search.SearchScreen
 import com.muzziq.mobile.ui.theme.MuzziQColors
 import com.muzziq.mobile.ui.theme.MuzziQTheme
@@ -75,7 +82,7 @@ class MainActivity : ComponentActivity() {
         else Manifest.permission.READ_EXTERNAL_STORAGE
 }
 
-private enum class Tab(val label: String) { HOME("Accueil"), SEARCH("Recherche"), LIBRARY("Bibliothèque") }
+private enum class Tab(val label: String) { HOME("Accueil"), SEARCH("Recherche"), LIBRARY("Bibliothèque"), PLAYLISTS("Playlists") }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -118,6 +125,10 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             val favoriteIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
             val downloadedIds by vm.downloadedTrackIds.collectAsStateWithLifecycle()
             val downloadingIds by vm.downloadingTrackIds.collectAsStateWithLifecycle()
+            val playlists by vm.playlists.collectAsStateWithLifecycle()
+            val openPlaylistId by vm.openPlaylistId.collectAsStateWithLifecycle()
+            val playlistTracks by vm.playlistTracks.collectAsStateWithLifecycle()
+            var showPlaylistPicker by remember { mutableStateOf(false) }
 
             LaunchedEffect(currentTrack) {
                 while (currentTrack != null) {
@@ -157,6 +168,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                                                     Tab.HOME -> Icons.Rounded.Home
                                                     Tab.SEARCH -> Icons.Rounded.Search
                                                     Tab.LIBRARY -> Icons.Rounded.LibraryMusic
+                                                    Tab.PLAYLISTS -> Icons.Rounded.QueueMusic
                                                 },
                                                 contentDescription = t.label,
                                             )
@@ -172,6 +184,18 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                         Tab.HOME -> HomeScreen(s.mode, library, padding) { vm.playFrom(library, it) }
                         Tab.SEARCH -> SearchScreen(s.mode, query, { query = it; vm.search(it) }, searchResults, padding) { vm.playFrom(searchResults, it) }
                         Tab.LIBRARY -> LibraryScreen(s.mode, library, busy, padding, onRescan = { vm.rescanStandaloneLibrary() }) { vm.playFrom(library, it) }
+                        Tab.PLAYLISTS -> PlaylistsScreen(
+                            playlists = playlists,
+                            openPlaylistId = openPlaylistId,
+                            playlistTracks = playlistTracks,
+                            contentPadding = padding,
+                            onCreatePlaylist = { vm.createPlaylist(it) },
+                            onDeletePlaylist = { vm.deletePlaylist(it) },
+                            onOpenPlaylist = { vm.openPlaylist(it) },
+                            onClosePlaylist = { vm.closePlaylist() },
+                            onRemoveTrack = { playlistId, trackId -> vm.removeFromPlaylist(playlistId, trackId) },
+                            onTrackClick = { vm.playFrom(playlistTracks, it) },
+                        )
                     }
                 }
 
@@ -197,8 +221,47 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             isDownloaded = track.id in downloadedIds,
                             isDownloading = track.id in downloadingIds,
                             onToggleDownload = { vm.requestDownload(track) },
+                            onAddToPlaylist = { showPlaylistPicker = true },
                         )
                     }
+                }
+
+                if (showPlaylistPicker) {
+                    val track = currentTrack
+                    AlertDialog(
+                        onDismissRequest = { showPlaylistPicker = false },
+                        title = { Text("Ajouter à une playlist", color = MuzziQColors.TextPrimary) },
+                        text = {
+                            if (playlists.isEmpty()) {
+                                Text("Aucune playlist — crée-en une depuis l'onglet Playlists.", color = MuzziQColors.TextMuted)
+                            } else {
+                                Column {
+                                    playlists.forEach { playlist ->
+                                        Text(
+                                            playlist.name,
+                                            color = MuzziQColors.TextPrimary,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    if (track != null) vm.addToPlaylist(playlist.id, track)
+                                                    showPlaylistPicker = false
+                                                }
+                                                .padding(vertical = 12.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = {
+                            Text(
+                                "Fermer",
+                                color = MuzziQColors.TextMuted,
+                                modifier = Modifier.clickable { showPlaylistPicker = false }.padding(8.dp),
+                            )
+                        },
+                        containerColor = MuzziQColors.Surface,
+                    )
                 }
             }
         }
