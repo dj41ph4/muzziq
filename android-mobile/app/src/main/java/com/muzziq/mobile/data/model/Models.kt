@@ -210,6 +210,21 @@ data class ServerCapabilitiesPayload(
     val plexIntegration: Boolean = false,
 )
 
+/** Reflet de GET /api/home — src/lib/recommendations/deterministicEngine.ts.
+ * Rangées contextuelles (plan §46), déjà côté serveur : Continuer l'écoute,
+ * Récemment ajoutés, Parce que vous aimez X. Le serveur n'inclut que les
+ * rangées non vides, jamais un placeholder client pour "masquer les
+ * sections vides". */
+@JsonClass(generateAdapter = true)
+data class HomeRowDto(
+    val id: String,
+    val title: String,
+    val recordings: List<Recording> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeRowsResponse(val rows: List<HomeRowDto> = emptyList())
+
 /** GET /api/updates/android — mise à jour auto-hébergée (§56.3). */
 @JsonClass(generateAdapter = true)
 data class AndroidUpdateInfo(

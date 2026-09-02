@@ -116,6 +116,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             var expanded by remember { mutableStateOf(false) }
 
             val library by vm.library.collectAsStateWithLifecycle()
+            val homeRows by vm.homeRows.collectAsStateWithLifecycle()
             val searchResults by vm.searchResults.collectAsStateWithLifecycle()
             val busy by vm.busy.collectAsStateWithLifecycle()
             val currentTrack by vm.player.currentTrack.collectAsStateWithLifecycle()
@@ -181,7 +182,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                     },
                 ) { padding ->
                     when (Tab.entries[tab]) {
-                        Tab.HOME -> HomeScreen(s.mode, library, padding) { vm.playFrom(library, it) }
+                        Tab.HOME -> HomeScreen(s.mode, library, homeRows, padding) { vm.playFrom(library, it) }
                         Tab.SEARCH -> SearchScreen(s.mode, query, { query = it; vm.search(it) }, searchResults, padding) { vm.playFrom(searchResults, it) }
                         Tab.LIBRARY -> LibraryScreen(s.mode, library, busy, padding, onRescan = { vm.rescanStandaloneLibrary() }) { vm.playFrom(library, it) }
                         Tab.PLAYLISTS -> PlaylistsScreen(

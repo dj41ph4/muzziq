@@ -14,6 +14,7 @@ import com.muzziq.mobile.core.capabilities.CapabilityManager
 import com.muzziq.mobile.core.capabilities.MuzziQCapabilities
 import com.muzziq.mobile.core.capabilities.ServerConnectionState
 import com.muzziq.mobile.data.model.Track
+import com.muzziq.mobile.data.model.TrackSource
 import com.muzziq.mobile.data.room.MuzziQDatabase
 import com.muzziq.mobile.domain.DownloadRepository
 import com.muzziq.mobile.domain.PlaylistRepository
@@ -43,6 +44,10 @@ sealed interface RootUiState {
     data class Ready(val mode: AppMode) : RootUiState
 }
 
+/** Rangée Home déjà résolue en Track (voir HomeRowDto, data/model/Models.kt) — le
+ * mapping DTO serveur vers Track vit dans AppViewModel, pas dans l'écran. */
+data class HomeRowUi(val id: String, val title: String, val tracks: List<Track>)
+
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Le paramètre de constructeur `application` (sans val) n'est capturé que dans les
     // initializers de propriété/blocs `by lazy` — pas dans le corps des fonctions membres
@@ -60,6 +65,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _library = MutableStateFlow<List<Track>>(emptyList())
     val library: StateFlow<List<Track>> = _library.asStateFlow()
+
+    /** Rangées Home (§46) — GET /api/home, mode Lié uniquement (moteur de recommandation
+     * déterministe serveur, aucun équivalent standalone aujourd'hui). Vide en standalone
+     * ou si le serveur n'a encore aucune rangée à proposer — HomeScreen retombe alors sur
+     * la liste "Bibliothèque" à plat, jamais un carrousel vide affiché pour faire joli. */
+    private val _homeRows = MutableStateFlow<List<HomeRowUi>>(emptyList())
+    val homeRows: StateFlow<List<HomeRowUi>> = _homeRows.asStateFlow()
 
     private val _searchResults = MutableStateFlow<List<Track>>(emptyList())
     val searchResults: StateFlow<List<Track>> = _searchResults.asStateFlow()
@@ -263,6 +275,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         MusicSourceLocator.set(standalone)
         downloadRepository = StandaloneDownloadRepository(standalone)
         playlistRepository = RoomPlaylistRepository(appContext)
+        _homeRows.value = emptyList()
         _state.value = RootUiState.Ready(AppMode.STANDALONE)
         refreshLibrary()
         refreshDownloads()
@@ -283,7 +296,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refreshServerCapabilities(url)
         refreshDownloads()
         refreshPlaylists()
+        refreshHomeRows(url)
         restorePersistedQueue()
+    }
+
+    /** GET /api/home (moteur de recommandation déterministe, déjà réel côté serveur —
+     * src/lib/recommendations/deterministicEngine.ts). Échec réseau ⇒ rangées vides,
+     * HomeScreen retombe sur la bibliothèque à plat, jamais une erreur bloquante. */
+    private fun refreshHomeRows(url: String) {
+        viewModelScope.launch {
+            val api = ApiClientFactory.create(url)
+            val result = runCatching { api.homeRows() }
+            val rows = result.getOrNull()?.takeIf { it.isSuccessful }?.body()?.rows.orEmpty()
+            _homeRows.value = rows.map { row ->
+                HomeRowUi(
+                    id = row.id,
+                    title = row.title,
+                    tracks = row.recordings.map { rec ->
+                        Track(
+                            id = rec.id,
+                            title = rec.title,
+                            artist = rec.artist,
+                            album = rec.album,
+                            durationSeconds = rec.durationSeconds,
+                            artworkUrl = rec.thumbnailUrl,
+                            source = TrackSource.Server(rec.id),
+                        )
+                    },
+                )
+            }
+        }
     }
 
     /** Reprend l'affichage de la dernière file jouée (plan §57), sans relancer de

@@ -5,6 +5,7 @@ import com.muzziq.mobile.data.model.AddPlaylistItemRequest
 import com.muzziq.mobile.data.model.AndroidUpdateInfo
 import com.muzziq.mobile.data.model.CreatePlaylistRequest
 import com.muzziq.mobile.data.model.HealthResponse
+import com.muzziq.mobile.data.model.HomeRowsResponse
 import com.muzziq.mobile.data.model.LibraryItemsResponse
 import com.muzziq.mobile.data.model.LoginRequest
 import com.muzziq.mobile.data.model.LoginResponse
@@ -52,6 +53,9 @@ interface MuzziqApi {
 
     @GET("/api/library/items")
     suspend fun libraryItems(@Header("Cookie") cookie: String?): Response<LibraryItemsResponse>
+
+    @GET("/api/home")
+    suspend fun homeRows(): Response<HomeRowsResponse>
 
     @POST("/api/library/items")
     suspend fun addLibraryItem(
