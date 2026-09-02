@@ -63,3 +63,60 @@ déconseillé), soit l'exécution partielle du `base.js` réel dans un bac à
 sable JS pour en extraire la fonction de déchiffrement dynamiquement. Les
 deux restent des sous-projets à part entière, à réévaluer plus tard — pas
 un correctif Android à faire "vite fait" pour cocher une case du plan.
+
+## Spike "streaming direct Android" (2026-09-02) — blocage reconfirmé, rien codé
+
+Objectif du spike (priorité 3 du plan de reprise) : `videoId → URL audio
+valide → Media3 → son`, sans passer par le serveur. Investigation réelle
+menée avant de conclure, appels réseau réels (aucun code de client tiers
+consulté ni copié) :
+
+- Rejoué depuis cet environnement le même appel `/youtubei/v1/player`
+  (`WEB_REMIX`, `signatureTimestamp: 20684`) documenté côté serveur :
+  `playabilityStatus.status = OK`, `streamingData` renvoyé. **19 formats
+  reçus (`dQw4w9WgXcQ`), 19/19 portent `signatureCipher`, 0 avec `url` en
+  clair** — le blocage documenté côté serveur est confirmé toujours actif
+  aujourd'hui, pas une régression datée qui se serait résolue depuis.
+- Récupéré le `base.js` réel (`jsUrl` extrait de la page HTML
+  `music.youtube.com/watch`, build `e937390a`, ~2,8 Mo) et vérifié
+  `signatureTimestamp:20684` littéralement présent dedans — cohérent avec
+  la valeur utilisée dans la requête, confirme que `sts` n'est pas
+  périmé.
+- Cherché la fonction de déchiffrement par la même heuristique que documentée
+  côté serveur (motif `X.split("")` isolé, point d'entrée classique avant
+  obfuscation Closure) : une seule occurrence dans tout le fichier, noyée
+  dans un helper générique polymorphe (`Dr(...)`, sert à convertir tout
+  type itérable en tableau, pas spécifique au chiffrement de signature).
+  Aucune fonction de déchiffrement isolable par un heuristique simple —
+  confirme littéralement la description déjà écrite côté serveur ("code
+  compilé Closure avec table de chaînes indexée, pas le schéma classique").
+
+**Conclusion du spike, honnête : blocage reconfirmé en conditions réelles
+depuis Android, pas contourné.** La seule piste qui reste plausible et non
+essayée — exécuter le `base.js` réel dans un bac à sable JS pour en extraire
+la fonction de déchiffrement dynamiquement (mentionnée ci-dessus) —
+bénéficierait sur Android d'un avantage que le serveur n'a pas : `WebView`
+est un vrai moteur Chromium (V8), pas `jsdom` (dont l'échec documenté côté
+serveur pour la génération de PoToken vient précisément du fait que ce n'est
+*pas* un vrai navigateur). Mais c'est un sous-projet à part entière, pas un
+spike : il faudrait (1) isoler dans `base.js` le point d'entrée réel de
+déchiffrement malgré l'obfuscation (pas trouvé par l'heuristique simple
+ci-dessus), (2) l'exécuter dans une `WebView` cachée avec les bons stubs
+`window`/`document` pour qu'il ne lève pas d'exception sur des API absentes,
+(3) vérifier le résultat contre un flux réellement joué — **aucune étape de
+ça n'est testable dans cet environnement de développement (pas de SDK/
+émulateur/appareil Android ici, seul le CI GitHub Actions compile)**. Écrire
+du code Kotlin qui prétendrait résoudre ce point sans jamais avoir pu
+l'exécuter une seule fois en conditions réelles serait exactement le "succès
+fabriqué" interdit — donc rien n'a été codé pour ce spike. Le module
+`InnerTubeClient`/`CipherResolver` reste non commencé côté Android, pour la
+même raison déjà documentée plus haut (bouton Play mort à 100% sans lui).
+
+Prochaine étape si ce chantier est repris : d'abord isoler manuellement (pas
+par regex fragile) le point d'entrée de déchiffrement dans un `base.js` réel
+téléchargé, en debuggant pas à pas dans un vrai navigateur desktop (Chrome
+DevTools sur `music.youtube.com`, poser un breakpoint sur l'appel qui
+consomme `signatureCipher`) — étape qui ne nécessite toujours pas de copier
+de code tiers, seulement de comprendre où le flot d'exécution mène. Une fois
+ce point d'entrée identifié avec certitude, l'exécution en `WebView` Android
+devient un vrai test réalisable, mais sur un appareil réel.
