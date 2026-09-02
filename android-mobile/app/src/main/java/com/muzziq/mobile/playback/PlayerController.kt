@@ -33,6 +33,12 @@ class PlayerController(context: Context) {
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs
 
+    /** Non nul entre [restoreDisplay] et la reprise effective — le morceau affiché
+     * (mini-player) n'a pas encore été rechargé dans le vrai player média (plan §57 :
+     * restaurer l'affichage au lancement de l'app n'implique pas de relancer un flux
+     * réseau tant que l'utilisateur n'a rien demandé). */
+    private var pendingRestore: Pair<List<Track>, Int>? = null
+
     fun connect(onReady: () -> Unit = {}) {
         if (controller != null) { onReady(); return }
         val token = SessionToken(appContext, ComponentName(appContext, PlaybackService::class.java))
@@ -60,6 +66,7 @@ class PlayerController(context: Context) {
 
     /** Lecture d'un morceau isolé, sans file autour (pas de Suivant/Précédent utile). */
     fun play(track: Track, source: MusicSource) {
+        pendingRestore = null
         _currentTrack.value = track
         val service = PlaybackServiceBridge.instanceOrNull() ?: return
         service.playTrack(track, source)
@@ -70,9 +77,24 @@ class PlayerController(context: Context) {
      * morceau cliqué. Rend Suivant/Précédent fonctionnels. */
     fun playQueue(tracks: List<Track>, startIndex: Int, source: MusicSource) {
         if (tracks.isEmpty()) return
+        pendingRestore = null
         _currentTrack.value = tracks[startIndex.coerceIn(0, tracks.lastIndex)]
         val service = PlaybackServiceBridge.instanceOrNull() ?: return
         service.playQueue(tracks, startIndex, source)
+    }
+
+    /** Affiche une file persistée (plan §57) sans démarrer de lecture réseau/disque —
+     * seul un vrai geste utilisateur (togglePlayPause) déclenche [playQueue]. Sans ça,
+     * relancer l'app relancerait silencieusement un flux, contraire à la règle "jamais
+     * de mise à jour/action silencieuse sans confirmation" appliquée ici à la lecture. */
+    fun restoreDisplay(tracks: List<Track>, currentIndex: Int, positionMs: Long) {
+        if (tracks.isEmpty()) return
+        val index = currentIndex.coerceIn(0, tracks.lastIndex)
+        val track = tracks[index]
+        _currentTrack.value = track
+        _positionMs.value = positionMs
+        _durationMs.value = ((track.durationSeconds ?: 0.0) * 1000).toLong()
+        pendingRestore = tracks to index
     }
 
     fun skipNext() {
@@ -83,7 +105,16 @@ class PlayerController(context: Context) {
         PlaybackServiceBridge.instanceOrNull()?.skipPrevious()
     }
 
-    fun togglePlayPause() {
+    /** [source] n'est nécessaire que pour reprendre une file restaurée ([restoreDisplay])
+     * jamais encore chargée dans le vrai player — null quand une lecture est déjà active,
+     * auquel cas c'est un simple play/pause MediaController. */
+    fun togglePlayPause(source: MusicSource? = null) {
+        val restore = pendingRestore
+        if (restore != null && source != null) {
+            pendingRestore = null
+            playQueue(restore.first, restore.second, source)
+            return
+        }
         val c = controller ?: return
         if (c.isPlaying) c.pause() else c.play()
     }

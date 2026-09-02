@@ -19,6 +19,7 @@ import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.muzziq.mobile.data.MusicSource
+import com.muzziq.mobile.data.QueueStateStore
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +51,7 @@ class PlaybackService : MediaLibraryService() {
     private var queue: List<Track> = emptyList()
     private var queueIndex: Int = -1
     private var queueSource: MusicSource? = null
+    private val queueStateStore by lazy { QueueStateStore(this) }
 
     override fun onCreate() {
         super.onCreate()
@@ -74,6 +76,12 @@ class PlaybackService : MediaLibraryService() {
                     recordAffinity(completed = true)
                     if (hasNext()) skipNext()
                 }
+            }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Persiste sur pause plutôt qu'à chaque frame (plan §57) — assez pour
+                // reprendre "là où on s'était arrêté" entre deux lancements de l'app,
+                // pas une précision à la seconde près pendant la lecture active.
+                if (!isPlaying) persistQueueState()
             }
         })
 
@@ -156,6 +164,13 @@ class PlaybackService : MediaLibraryService() {
         player.setMediaItem(mediaItem)
         player.prepare()
         player.playWhenReady = true
+        persistQueueState()
+    }
+
+    private fun persistQueueState() {
+        if (queue.isEmpty() || queueIndex !in queue.indices) return
+        val position = player.currentPosition.coerceAtLeast(0)
+        scope.launch { queueStateStore.save(queue, queueIndex, position) }
     }
 
     private fun recordAffinity(completed: Boolean) {

@@ -7,6 +7,8 @@ import com.muzziq.mobile.data.ApiClientFactory
 import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.data.AppPrefs
 import com.muzziq.mobile.data.MusicSource
+import com.muzziq.mobile.data.QueueStateStore
+import com.muzziq.mobile.data.QueueStateStore.Companion.toTrack
 import com.muzziq.mobile.data.ServerMusicSource
 import com.muzziq.mobile.core.capabilities.CapabilityManager
 import com.muzziq.mobile.core.capabilities.MuzziQCapabilities
@@ -58,6 +60,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     val standalone: StandaloneMusicSource by lazy { StandaloneMusicSource(application) }
+    private val queueStateStore by lazy { QueueStateStore(application) }
 
     init {
         StandaloneMusicSourceHolder.instance = standalone
@@ -120,6 +123,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         MusicSourceLocator.set(standalone)
         _state.value = RootUiState.Ready(AppMode.STANDALONE)
         refreshLibrary()
+        restorePersistedQueue()
     }
 
     private suspend fun activateLinked(url: String) {
@@ -130,6 +134,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.value = RootUiState.Ready(AppMode.LINKED)
         refreshLibrary()
         refreshServerCapabilities(url)
+        restorePersistedQueue()
+    }
+
+    /** Reprend l'affichage de la dernière file jouée (plan §57), sans relancer de
+     * lecture tant que l'utilisateur n'a pas tapé play (voir PlayerController.restoreDisplay) —
+     * marche identiquement dans les deux modes, la persistance ne dépend d'aucune
+     * capacité serveur. */
+    private suspend fun restorePersistedQueue() {
+        val state = queueStateStore.load() ?: return
+        if (state.tracks.isEmpty()) return
+        player.restoreDisplay(state.tracks.map { it.toTrack() }, state.currentIndex, state.positionMs)
     }
 
     /** Interroge /api/capabilities plutôt que de supposer qu'un serveur connecté possède

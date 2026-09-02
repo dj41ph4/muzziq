@@ -211,6 +211,29 @@ data class Track(
     val source: TrackSource,
 )
 
+/** Persistance de la file d'attente (plan §40/§57, voir data/QueueStateStore.kt) — un
+ * Track complet plutôt qu'un simple id, pour restaurer l'affichage (titre/artiste/
+ * pochette) sans dépendre d'un appel réseau au redémarrage de l'app. */
+@JsonClass(generateAdapter = true)
+data class PersistedTrackDto(
+    val id: String,
+    val title: String,
+    val artist: String,
+    val album: String? = null,
+    val durationSeconds: Double? = null,
+    val artworkUrl: String? = null,
+    /** "SERVER" | "LOCAL" — reflet de TrackSource, jamais une 3e valeur inventée. */
+    val sourceKind: String,
+    val sourceRef: String,
+)
+
+@JsonClass(generateAdapter = true)
+data class PersistedQueueState(
+    val tracks: List<PersistedTrackDto>,
+    val currentIndex: Int,
+    val positionMs: Long,
+)
+
 sealed interface TrackSource {
     /** Mode Lié — recordingId MuzziQ, résolu au moment du play via /api/recordings/{id}/resolve. */
     data class Server(val recordingId: String) : TrackSource

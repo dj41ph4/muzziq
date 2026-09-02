@@ -138,7 +138,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                                         track = track,
                                         isPlaying = isPlaying,
                                         animatedVisibilityScope = this@AnimatedVisibility,
-                                        onTogglePlayPause = { vm.player.togglePlayPause() },
+                                        onTogglePlayPause = { vm.player.togglePlayPause(vm.musicSource) },
                                         onExpand = { expanded = true },
                                     )
                                 }
@@ -184,7 +184,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             positionMs = positionMs,
                             durationMs = durationMs,
                             animatedVisibilityScope = this@AnimatedVisibility,
-                            onTogglePlayPause = { vm.player.togglePlayPause() },
+                            onTogglePlayPause = { vm.player.togglePlayPause(vm.musicSource) },
                             onSeek = { vm.player.seekTo(it) },
                             onCollapse = { expanded = false },
                             onSkipNext = { vm.player.skipNext() },
