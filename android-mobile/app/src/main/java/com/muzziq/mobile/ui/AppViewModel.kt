@@ -18,6 +18,12 @@ import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
 import com.muzziq.mobile.data.room.MuzziQDatabase
 import com.muzziq.mobile.domain.DownloadRepository
+import com.muzziq.mobile.domain.InMemoryProviderRegistry
+import com.muzziq.mobile.domain.MusicProvider
+import com.muzziq.mobile.domain.MusicProviderId
+import com.muzziq.mobile.domain.MusicSourceCatalogueAdapter
+import com.muzziq.mobile.domain.MusicSourceLibraryAdapter
+import com.muzziq.mobile.domain.MusicSourceStreamResolverAdapter
 import com.muzziq.mobile.domain.PlaylistRepository
 import com.muzziq.mobile.domain.PlaylistSummary
 import com.muzziq.mobile.domain.RoomFavoriteRepository
@@ -25,6 +31,7 @@ import com.muzziq.mobile.domain.RoomPlaylistRepository
 import com.muzziq.mobile.domain.ServerDownloadRepository
 import com.muzziq.mobile.domain.ServerPlaylistRepository
 import com.muzziq.mobile.domain.StandaloneDownloadRepository
+import com.muzziq.mobile.domain.StandaloneHistoryAdapter
 import com.muzziq.mobile.playback.MusicSourceLocator
 import com.muzziq.mobile.playback.PlayerController
 import com.muzziq.mobile.playback.PlaylistRepositoryLocator
@@ -205,6 +212,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _capabilities = MutableStateFlow(capabilityManager.forConnection(ServerConnectionState.DISCONNECTED))
     val capabilities: StateFlow<MuzziQCapabilities> = _capabilities.asStateFlow()
 
+    /** N'est plus consommé que pour la lecture (play/playFrom → PlayerController →
+     * PlaybackService) : c'est la seule surface encore couplée à `MusicSource` — voir
+     * le commentaire de tête de domain/ProviderRegistry.kt pour la raison (Android Auto/
+     * MediaLibraryService non vérifiable sans appareil réel, migration volontairement
+     * repoussée). refreshLibrary()/search() sont passés à ProviderRegistry ci-dessous. */
     var musicSource: MusicSource? = null
         private set
 
@@ -391,6 +403,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun activateStandalone() {
         musicSource = standalone
         MusicSourceLocator.set(standalone)
+        InMemoryProviderRegistry.unregister(MusicProviderId.SERVER)
+        InMemoryProviderRegistry.register(
+            MusicProvider(
+                id = MusicProviderId.LOCAL,
+                label = standalone.label,
+                catalogue = MusicSourceCatalogueAdapter(standalone),
+                library = MusicSourceLibraryAdapter(standalone),
+                streamResolver = MusicSourceStreamResolverAdapter(standalone),
+                history = StandaloneHistoryAdapter(standalone),
+            ),
+        )
         downloadRepository = StandaloneDownloadRepository(standalone)
         playlistRepository = RoomPlaylistRepository(appContext).also { PlaylistRepositoryLocator.set(it) }
         browseApi = null
@@ -410,6 +433,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val source = ServerMusicSource(url, cookie, downloadDao)
         musicSource = source
         MusicSourceLocator.set(source)
+        InMemoryProviderRegistry.unregister(MusicProviderId.LOCAL)
+        InMemoryProviderRegistry.register(
+            MusicProvider(
+                id = MusicProviderId.SERVER,
+                label = source.label,
+                catalogue = MusicSourceCatalogueAdapter(source),
+                library = MusicSourceLibraryAdapter(source),
+                streamResolver = MusicSourceStreamResolverAdapter(source),
+                // Pas de HistoryRepository serveur : aucune route consommée pour pousser
+                // un événement d'écoute côté Android en mode Lié (limite déjà documentée
+                // dans domain/Repositories.kt, HistoryRepository).
+            ),
+        )
         downloadRepository = ServerDownloadRepository(appContext, source)
         playlistRepository = ServerPlaylistRepository(url, cookie).also { PlaylistRepositoryLocator.set(it) }
         browseApi = ApiClientFactory.create(url)
@@ -514,20 +550,35 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Bibliothèque — passe par ProviderRegistry plutôt que par `musicSource` directement
+     * (première migration réelle du plan §67 : le mécanisme cumulatif existe même si un
+     * seul provider est actif aujourd'hui, mode exclusif hérité — voir ProviderRegistry.kt).
+     * Union des bibliothèques de tous les providers actifs ; avec un seul provider actif,
+     * résultat strictement identique à l'ancien `source.library()`. */
     fun refreshLibrary() {
-        val source = musicSource ?: return
+        val providers = InMemoryProviderRegistry.observeActive().value
+        if (providers.isEmpty()) return
         viewModelScope.launch {
-            source.library().onSuccess { _library.value = it }
-                .onFailure { _error.value = it.message }
+            val results = providers.map { it.library.library() }
+            if (results.all { it.isFailure }) {
+                _error.value = results.first().exceptionOrNull()?.message
+                return@launch
+            }
+            _library.value = results.mapNotNull { it.getOrNull() }.flatten()
         }
     }
 
     fun search(query: String) {
-        val source = musicSource ?: return
         if (query.isBlank()) { _searchResults.value = emptyList(); return }
+        val providers = InMemoryProviderRegistry.observeActive().value
+        if (providers.isEmpty()) return
         viewModelScope.launch {
-            source.search(query).onSuccess { _searchResults.value = it }
-                .onFailure { _error.value = it.message }
+            val results = providers.map { it.catalogue.search(query) }
+            if (results.all { it.isFailure }) {
+                _error.value = results.first().exceptionOrNull()?.message
+                return@launch
+            }
+            _searchResults.value = results.mapNotNull { it.getOrNull() }.flatten()
         }
     }
 
@@ -551,6 +602,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun backToOnboarding() {
         viewModelScope.launch {
             prefs.resetMode()
+            InMemoryProviderRegistry.clear()
             _state.value = RootUiState.Onboarding
         }
     }

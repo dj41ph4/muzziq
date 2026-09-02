@@ -10,14 +10,16 @@ import kotlinx.coroutines.flow.Flow
  * responsabilité, comme demandé pour préparer l'architecture "autonomous-first"
  * (téléphone capable seul, serveur = accélérateur optionnel de capacités).
  *
- * État réel : ces interfaces sont neuves et ne remplacent PAS encore
- * `MusicSource` — `AppViewModel`/`PlaybackService` continuent d'utiliser
- * `MusicSource` tel quel, c'est ce qui compile et fonctionne aujourd'hui.
- * Les adaptateurs de ce fichier (`MusicSourceCatalogueAdapter`, etc.) montrent
- * comment consommer un `MusicSource` existant à travers ces contrats plus
- * étroits, sans dupliquer de logique — première étape d'une migration
- * progressive, pas un remplacement en un coup. La bascule complète de
- * AppViewModel/PlaybackService vers ces interfaces reste un chantier suivant.
+ * État réel : `AppViewModel.refreshLibrary()`/`search()` consomment maintenant
+ * ces contrats via `ProviderRegistry` (domain/ProviderRegistry.kt) plutôt que
+ * `MusicSource` directement — première migration réelle, pas seulement un
+ * pont théorique. `PlaybackService` (résolution de flux ExoPlayer + recherche
+ * vocale/browse Android Auto) continue en revanche d'utiliser `MusicSource`
+ * via `MusicSourceLocator` tel quel : c'est la surface la plus risquée à
+ * faire migrer sans appareil réel pour la vérifier (MediaLibraryService,
+ * cycle de vie indépendant de l'Activity) — voir le commentaire de tête de
+ * ProviderRegistry.kt. Migration progressive assumée, pas un remplacement
+ * en un coup.
  */
 
 /** Recherche/consultation du catalogue (§47) — catalogue serveur (YouTube Music + local)
