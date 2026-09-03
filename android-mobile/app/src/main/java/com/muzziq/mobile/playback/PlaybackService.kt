@@ -21,6 +21,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.muzziq.mobile.data.MusicSource
 import com.muzziq.mobile.data.QueueStateStore
 import com.muzziq.mobile.data.model.Track
+import com.muzziq.mobile.providers.youtube.YouTubeMusicStandaloneSource
 import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
 import com.muzziq.mobile.domain.PlaylistSummary
 import kotlinx.coroutines.CoroutineScope
@@ -77,12 +78,12 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
-        // Les URLs audio directes sont émises par le client InnerTube Android.
+        // Les URLs audio directes sont émises par un profil InnerTube dédié.
         // Media3 doit conserver une empreinte de client média cohérente quand il
         // ouvre ensuite ces URLs (Range est ajouté par OkHttpDataSource lui-même).
         val httpDataSourceFactory = OkHttpDataSource.Factory(okhttp3.OkHttpClient())
             .setDefaultRequestProperties(
-                mapOf("User-Agent" to "com.google.android.youtube/20.10.38 (Linux; U; Android 14)")
+                mapOf("User-Agent" to YouTubeMusicStandaloneSource.PLAYBACK_USER_AGENT)
             )
         val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)

@@ -44,33 +44,43 @@ class YouTubeMusicStandaloneSource {
     suspend fun resolvePlayableUri(track: Track): Result<String> = withContext(Dispatchers.IO) {
         val videoId = (track.source as? TrackSource.YouTube)?.videoId
             ?: return@withContext Result.failure(IllegalArgumentException("Source YouTube invalide"))
-        runCatching {
-            val body = JSONObject()
-                .put("context", playbackContext())
-                .put("videoId", videoId)
-                .put("contentCheckOk", true)
-                .put("racyCheckOk", true)
-                .toString()
-                .toRequestBody(JSON)
-            val request = Request.Builder()
-                .url("$BASE_URL/player?key=$API_KEY")
-                .post(body)
-                .header("Origin", "https://music.youtube.com")
-                .header("Referer", "https://music.youtube.com/")
-                .build()
-            val json = client.newCall(request).execute().use { response ->
-                check(response.isSuccessful) { "Lecture YouTube Music: HTTP ${response.code}" }
-                JSONObject(response.body?.string().orEmpty())
+        var lastError: Throwable? = null
+        for (profile in playbackProfiles) {
+            val result = runCatching {
+                val body = JSONObject()
+                    .put("context", profile.context())
+                    .put("videoId", videoId)
+                    .put("contentCheckOk", true)
+                    .put("racyCheckOk", true)
+                    .toString()
+                    .toRequestBody(JSON)
+                val request = Request.Builder()
+                    .url("$BASE_URL/player?key=$API_KEY")
+                    .post(body)
+                    .header("Origin", "https://music.youtube.com")
+                    .header("Referer", "https://music.youtube.com/")
+                    .header("User-Agent", profile.userAgent)
+                    .header("X-YouTube-Client-Name", profile.clientId)
+                    .header("X-YouTube-Client-Version", profile.version)
+                    .build()
+                val json = client.newCall(request).execute().use { response ->
+                    check(response.isSuccessful) { "Lecture YouTube Music: HTTP ${response.code}" }
+                    JSONObject(response.body?.string().orEmpty())
+                }
+                val formats = json.optJSONObject("streamingData")?.optJSONArray("adaptiveFormats")
+                    ?: error("Aucun flux audio retourné")
+                val bestAudio = (0 until formats.length())
+                    .mapNotNull { formats.optJSONObject(it) }
+                    .filter { it.optString("mimeType").startsWith("audio/") && it.optString("url").isNotBlank() }
+                    .maxByOrNull { it.optLong("bitrate", 0L) }
+                    ?: error("InnerTube n'a retourné aucun flux audio direct")
+                bestAudio.getString("url")
             }
-            val formats = json.optJSONObject("streamingData")?.optJSONArray("adaptiveFormats")
-                ?: error("Aucun flux audio retourné")
-            val bestAudio = (0 until formats.length())
-                .mapNotNull { formats.optJSONObject(it) }
-                .filter { it.optString("mimeType").startsWith("audio/") && it.optString("url").isNotBlank() }
-                .maxByOrNull { it.optLong("bitrate", 0L) }
-                ?: error("InnerTube n'a retourné aucun flux audio direct")
-            bestAudio.getString("url")
+            val url = result.getOrNull()
+            if (url != null) return@withContext Result.success(url)
+            lastError = result.exceptionOrNull()
         }
+        Result.failure(lastError ?: IllegalStateException("Aucun profil InnerTube n'a fourni de flux audio"))
     }
 
     private fun context() = JSONObject()
@@ -80,12 +90,18 @@ class YouTubeMusicStandaloneSource {
             .put("hl", "fr")
             .put("gl", "BE"))
 
-    private fun playbackContext() = JSONObject()
-        .put("client", JSONObject()
-            .put("clientName", "ANDROID")
-            .put("clientVersion", "20.10.38")
+    private data class PlaybackProfile(
+        val name: String,
+        val version: String,
+        val clientId: String,
+        val userAgent: String,
+    ) {
+        fun context() = JSONObject().put("client", JSONObject()
+            .put("clientName", name)
+            .put("clientVersion", version)
             .put("hl", "fr")
             .put("gl", "BE"))
+    }
 
     private fun parseSearch(root: JSONObject): List<Track> {
         val results = mutableListOf<Track>()
@@ -194,5 +210,15 @@ class YouTubeMusicStandaloneSource {
         private const val API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
         private const val BASE_URL = "https://music.youtube.com/youtubei/v1"
         private val JSON = "application/json; charset=utf-8".toMediaType()
+        /** Profil qui fournit actuellement un flux audio direct sans jeton. */
+        const val PLAYBACK_USER_AGENT =
+            "com.google.ios.youtube/21.03.1 (iPhone16,2; U; CPU iOS 18_2 like Mac OS X;)"
+        private val playbackProfiles = listOf(
+            PlaybackProfile("IOS", "21.03.1", "5", PLAYBACK_USER_AGENT),
+            PlaybackProfile(
+                "ANDROID", "20.10.38", "3",
+                "com.google.android.youtube/20.10.38 (Linux; U; Android 14)"
+            ),
+        )
     }
 }
