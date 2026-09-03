@@ -25,7 +25,11 @@ import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
 @Composable
-fun TrackRow(track: Track, onClick: () -> Unit) {
+fun TrackRow(
+    track: Track,
+    onClick: () -> Unit,
+    trailingContent: (@Composable () -> Unit)? = null,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -65,5 +69,6 @@ fun TrackRow(track: Track, onClick: () -> Unit) {
             Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(track.artist, color = MuzziQColors.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        if (trailingContent != null) trailingContent()
     }
 }

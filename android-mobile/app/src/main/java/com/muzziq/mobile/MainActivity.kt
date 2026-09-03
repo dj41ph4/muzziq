@@ -11,11 +11,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -248,7 +253,16 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                         }
                     },
                 ) { padding ->
-                    when (Tab.entries[tab]) {
+                    // Crossfade plutôt qu'un changement brutal de contenu au tap sur un
+                    // onglet de la barre de navigation (§56.1, finition visuelle) — reste
+                    // volontairement discret (pas de slide directionnel) car les onglets
+                    // n'ont pas d'ordre hiérarchique entre eux.
+                    AnimatedContent(
+                        targetState = tab,
+                        label = "tab-content",
+                        transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                    ) { selectedTab ->
+                    when (Tab.entries[selectedTab]) {
                         Tab.HOME -> HomeScreen(
                             mode = s.mode,
                             tracks = library,
@@ -291,6 +305,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             contentPadding = padding,
                             onTrackClick = { vm.playFrom(history.map { entry -> entry.track }, it) },
                         )
+                    }
                     }
                 }
 
@@ -368,7 +383,13 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                     )
                 }
 
-                if (showSettings) {
+                // Glisse depuis le bas + fondu plutôt qu'une apparition brutale (§56.1) —
+                // même famille de transition que le plein écran lecteur juste au-dessus.
+                AnimatedVisibility(
+                    visible = showSettings,
+                    enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 8 },
+                    exit = fadeOut(tween(150)) + slideOutVertically(tween(150)) { it / 8 },
+                ) {
                     val spotifyAccount by vm.spotifyAccount.collectAsStateWithLifecycle()
                     val spotifyBusy by vm.spotifyBusy.collectAsStateWithLifecycle()
                     val spotifyError by vm.spotifyError.collectAsStateWithLifecycle()

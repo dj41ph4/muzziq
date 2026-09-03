@@ -130,14 +130,7 @@ fun PlaylistsScreen(
                     }
                 }
                 if (playlists.isEmpty()) {
-                    item {
-                        Text(
-                            "Aucune playlist — crée-en une avec le bouton +.",
-                            color = MuzziQColors.TextMuted,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(16.dp),
-                        )
-                    }
+                    item { EmptyState("Aucune playlist — crée-en une avec le bouton +.") }
                 }
                 items(playlists, key = { it.id }) { playlist ->
                     Row(

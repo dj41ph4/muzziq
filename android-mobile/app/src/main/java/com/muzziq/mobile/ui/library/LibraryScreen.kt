@@ -1,7 +1,6 @@
 package com.muzziq.mobile.ui.library
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +33,8 @@ import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.ui.AlbumUi
 import com.muzziq.mobile.ui.ArtistUi
+import com.muzziq.mobile.ui.common.AlbumCard
+import com.muzziq.mobile.ui.common.ArtistCircleCard
 import com.muzziq.mobile.ui.common.EmptyState
 import com.muzziq.mobile.ui.common.HeroCard
 import com.muzziq.mobile.ui.common.MuzziQFilterChip
@@ -135,32 +136,46 @@ fun LibraryScreen(
                 LibraryView.TRACKS -> items(tracks, key = { it.id }) { track -> TrackRow(track) { onTrackClick(track) } }
                 LibraryView.ARTISTS -> {
                     if (artists.isEmpty()) item { EmptyBrowseNotice(mode) }
-                    items(artists, key = { it.id }) { artist ->
+                    // Grille 2 colonnes non-lazy (même pattern que les raccourcis Home,
+                    // voir HomeScreen) plutôt qu'un LazyVerticalGrid imbriqué dans ce
+                    // LazyColumn — évite le double scrollable.
+                    items(artists.chunked(2), key = { row -> row.joinToString("|") { it.id } }) { row ->
                         Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { detailTitle = artist.name; onSelectArtist(artist.id) }
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(20.dp),
                         ) {
-                            Column {
-                                Text(artist.name, color = MuzziQColors.TextPrimary, fontSize = 15.sp)
-                                Text("${artist.trackCount} morceau(x) · ${artist.albumCount} album(s)", color = MuzziQColors.TextMuted, fontSize = 12.sp)
+                            row.forEach { artist ->
+                                Column {
+                                    ArtistCircleCard(
+                                        name = artist.name,
+                                        artworkUrl = null,
+                                        onClick = { detailTitle = artist.name; onSelectArtist(artist.id) },
+                                    )
+                                    Text(
+                                        "${artist.trackCount} morceau(x) · ${artist.albumCount} album(s)",
+                                        color = MuzziQColors.TextMuted,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                    )
+                                }
                             }
                         }
                     }
                 }
                 LibraryView.ALBUMS -> {
                     if (albums.isEmpty()) item { EmptyBrowseNotice(mode) }
-                    items(albums, key = { it.id }) { album ->
+                    items(albums.chunked(2), key = { row -> row.joinToString("|") { it.id } }) { row ->
                         Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { detailTitle = album.title; onSelectAlbum(album.id) }
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(20.dp),
                         ) {
-                            Column {
-                                Text(album.title, color = MuzziQColors.TextPrimary, fontSize = 15.sp)
-                                Text("${album.artist} · ${album.trackCount} morceau(x)", color = MuzziQColors.TextMuted, fontSize = 12.sp)
+                            row.forEach { album ->
+                                AlbumCard(
+                                    title = album.title,
+                                    artist = album.artist,
+                                    artworkUrl = null,
+                                    onClick = { detailTitle = album.title; onSelectAlbum(album.id) },
+                                )
                             }
                         }
                     }
