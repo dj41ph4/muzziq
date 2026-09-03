@@ -28,6 +28,25 @@ class StandaloneStreamExtractor(context: Context) {
     private val configRepository = AndroidPlayerConfigRepository(appContext)
     private val configStore = RemotePlayerConfigStore(httpClient, configRepository)
     private val cipherService = YouTubeCipherService(httpClient, configStore)
+    private val tokenProvider = object : TokenProvider {
+        override val capabilities = TokenProviderCapabilities(
+            providers = setOf(PoTokenProviderKind.WEB_BOTGUARD),
+            usesWebView = true,
+        )
+
+        override suspend fun getPoToken(
+            videoId: String,
+            visitorData: String,
+            cookie: String?,
+        ): PoTokenResult? {
+            val token = PoTokenWebView.getOrCreate(appContext).obtainIntegrityToken().getOrNull() ?: return null
+            return PoTokenResult(
+                playerRequestToken = token.value,
+                streamingDataToken = token.value,
+                visitorData = visitorData,
+            )
+        }
+    }
     private val extractor = InnerTubeExtractor(
         configParser = YtConfigParserImpl(httpClient, innerTube, configStore),
         cipherService = cipherService,
@@ -55,26 +74,6 @@ class StandaloneStreamExtractor(context: Context) {
             headers = stream.headers,
             profileKey = "extractor:${stream.profileId}",
         )
-    }
-
-    private val tokenProvider = object : TokenProvider {
-        override val capabilities = TokenProviderCapabilities(
-            providers = setOf(PoTokenProviderKind.WEB_BOTGUARD),
-            usesWebView = true,
-        )
-
-        override suspend fun getPoToken(
-            videoId: String,
-            visitorData: String,
-            cookie: String?,
-        ): PoTokenResult? {
-            val token = PoTokenWebView.getOrCreate(appContext).obtainIntegrityToken().getOrNull() ?: return null
-            return PoTokenResult(
-                playerRequestToken = token.value,
-                streamingDataToken = token.value,
-                visitorData = visitorData,
-            )
-        }
     }
 
     private class AndroidPlayerConfigRepository(context: Context) : PlayerConfigRepository {
