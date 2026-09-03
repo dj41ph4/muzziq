@@ -1,9 +1,10 @@
 "use client";
 
 import useSWR from "swr";
-import { Music2 } from "lucide-react";
+import Link from "next/link";
+import { Music2, ListMusic, Search, Download, Sparkles } from "lucide-react";
 import { Logo } from "@/components/Logo";
-import { usePlayer } from "@/components/PlayerContext";
+import { usePlayer, type PlayableTrack } from "@/components/PlayerContext";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -19,6 +20,18 @@ interface HomeRow {
   title: string;
   recordings: Recording[];
 }
+
+interface PlaylistSummary {
+  id: string;
+  name: string;
+  itemCount: number;
+}
+
+const QUICK_LINKS = [
+  { href: "/search", label: "Recherche", Icon: Search },
+  { href: "/downloads", label: "Téléchargements", Icon: Download },
+  { href: "/assistant", label: "Assistant", Icon: Sparkles },
+];
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -59,13 +72,26 @@ function RowSkeleton() {
 
 export default function HomePage() {
   const { data } = useSWR<{ rows: HomeRow[] }>("/api/home", fetcher);
+  const { data: playlists } = useSWR<{ playlists: PlaylistSummary[] }>("/api/playlists", fetcher);
   const { play } = usePlayer();
 
-  async function playRecording(r: Recording) {
+  async function resolveOne(r: Recording): Promise<PlayableTrack | null> {
     const res = await fetch(`/api/recordings/${r.id}/resolve`);
-    if (!res.ok) return; // Aucune source réelle trouvée — jamais fabriquer une lecture qui échouera.
+    if (!res.ok) return null; // Aucune source réelle trouvée — jamais fabriquer une lecture qui échouera.
     const resolved: { kind: "local" | "provider"; id: string } = await res.json();
-    play({ kind: resolved.kind, id: resolved.id, title: r.title, artist: r.artist, thumbnailUrl: r.thumbnailUrl });
+    return { kind: resolved.kind, id: resolved.id, title: r.title, artist: r.artist, thumbnailUrl: r.thumbnailUrl };
+  }
+
+  async function playRecording(r: Recording, row: Recording[]) {
+    // Résout la ligne entière (pas seulement le morceau cliqué) pour que
+    // suivant/précédent enchaînent sur de vraies sources jouables plutôt
+    // que sur des recordingId non résolus.
+    const resolvedRow = await Promise.all(row.map(resolveOne));
+    const queue = resolvedRow.filter((t): t is PlayableTrack => t !== null);
+    const clickedIdx = row.findIndex((x) => x.id === r.id);
+    const target = resolvedRow[clickedIdx];
+    if (!target || queue.length === 0) return;
+    play(target, queue);
   }
 
   return (
@@ -77,6 +103,33 @@ export default function HomePage() {
           <h1 className="mt-0.5 text-4xl font-extrabold tracking-tight sm:text-5xl">{greeting()}</h1>
         </div>
       </header>
+
+      <div className="float-in grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
+        {playlists?.playlists.slice(0, 6).map((p) => (
+            <Link
+              key={p.id}
+              href={`/playlists/${p.id}`}
+              className="glass flex items-center gap-3 overflow-hidden rounded-lg pr-4 transition-colors hover:bg-white/[0.06]"
+            >
+              <div className="art-fallback flex h-14 w-14 flex-shrink-0 items-center justify-center">
+                <ListMusic size={18} className="text-white/25" />
+              </div>
+              <span className="truncate text-[14px] font-bold tracking-tight">{p.name}</span>
+            </Link>
+          ))}
+          {QUICK_LINKS.map(({ href, label, Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className="glass flex items-center gap-3 overflow-hidden rounded-lg pr-4 transition-colors hover:bg-white/[0.06]"
+            >
+              <div className="brand-gradient flex h-14 w-14 flex-shrink-0 items-center justify-center">
+                <Icon size={18} className="text-black" />
+              </div>
+              <span className="truncate text-[14px] font-bold tracking-tight">{label}</span>
+            </Link>
+          ))}
+      </div>
 
       {!data && <RowSkeleton />}
 
@@ -94,7 +147,7 @@ export default function HomePage() {
           <h2 className="mb-4 text-xl font-bold tracking-tight">{row.title}</h2>
           <div className="-mx-5 flex gap-4 overflow-x-auto px-5 pb-2 sm:-mx-8 sm:px-8" style={{ scrollbarWidth: "none" }}>
             {row.recordings.map((r) => (
-              <div key={r.id} onClick={() => playRecording(r)} className="group w-36 flex-shrink-0 cursor-pointer">
+              <div key={r.id} onClick={() => playRecording(r, row.recordings)} className="group w-36 flex-shrink-0 cursor-pointer">
                 <Cover url={r.thumbnailUrl} />
                 <div className="mt-2 truncate text-[13px] font-semibold tracking-tight">{r.title}</div>
                 <div className="truncate text-[12px] text-[var(--ink-soft)]">{r.artist}</div>

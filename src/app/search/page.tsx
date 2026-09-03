@@ -49,11 +49,15 @@ export default function SearchPage() {
     };
   }
 
-  function playTrack(t: EnrichedTrack) {
-    const playable: PlayableTrack = t.localMatch
+  function toPlayable(t: EnrichedTrack): PlayableTrack {
+    return t.localMatch
       ? { kind: "local", id: t.localMatch.fileId, title: t.title, artist: t.artist, album: t.album, thumbnailUrl: t.thumbnailUrl, durationSeconds: t.durationSeconds }
       : { kind: "provider", id: t.providerTrackId, title: t.title, artist: t.artist, album: t.album, thumbnailUrl: t.thumbnailUrl, durationSeconds: t.durationSeconds };
-    play(playable);
+  }
+
+  function playTrack(t: EnrichedTrack) {
+    const queue = (data?.tracks ?? []).map(toPlayable);
+    play(toPlayable(t), queue);
   }
 
   async function addToLibrary(e: MouseEvent, track: EnrichedTrack) {
