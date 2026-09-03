@@ -8,12 +8,8 @@ import com.metrolist.innertubex.cipher.YouTubeCipherService
 import com.metrolist.innertubex.extraction.AudioQuality
 import com.metrolist.innertubex.extraction.ContentHints
 import com.metrolist.innertubex.extraction.InnerTubeExtractor
-import com.metrolist.innertubex.extraction.PoTokenResult
-import com.metrolist.innertubex.extraction.TokenProvider
-import com.metrolist.innertubex.extraction.TokenProviderCapabilities
 import com.metrolist.innertubex.extraction.YtConfigParserImpl
 import com.metrolist.innertubex.extraction.generateClientPlaybackNonce
-import com.metrolist.innertubex.extraction.strategy.PoTokenProviderKind
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 
@@ -28,30 +24,10 @@ class StandaloneStreamExtractor(context: Context) {
     private val configRepository = AndroidPlayerConfigRepository(appContext)
     private val configStore = RemotePlayerConfigStore(httpClient, configRepository)
     private val cipherService = YouTubeCipherService(httpClient, configStore)
-    private val tokenProvider = object : TokenProvider {
-        override val capabilities = TokenProviderCapabilities(
-            providers = setOf(PoTokenProviderKind.WEB_BOTGUARD),
-            usesWebView = true,
-        )
-
-        override suspend fun getPoToken(
-            videoId: String,
-            visitorData: String,
-            cookie: String?,
-        ): PoTokenResult? {
-            val token = PoTokenWebView.getOrCreate(appContext).obtainIntegrityToken().getOrNull() ?: return null
-            return PoTokenResult(
-                playerRequestToken = token.value,
-                streamingDataToken = token.value,
-                visitorData = visitorData,
-            )
-        }
-    }
     private val extractor = InnerTubeExtractor(
         configParser = YtConfigParserImpl(httpClient, innerTube, configStore),
         cipherService = cipherService,
         innerTube = innerTube,
-        tokenProvider = tokenProvider,
     )
 
     suspend fun resolve(videoId: String): Result<ResolvedOnlineStream> = runCatching {
@@ -61,7 +37,10 @@ class StandaloneStreamExtractor(context: Context) {
                 hints = ContentHints(wantVideo = false).withStreamCapabilities(
                     allowHls = false,
                     allowSabr = false,
-                    allowBoundedRange = true,
+                    // Media3 lit ici un flux progressif direct. Les profils qui
+                    // imposent des plages bornées sont exclus tant que le lecteur
+                    // ne possède pas encore un DataSource à fragments dédiés.
+                    allowBoundedRange = false,
                 ),
                 excludedClients = emptySet(),
                 audioQuality = AudioQuality.HIGH,

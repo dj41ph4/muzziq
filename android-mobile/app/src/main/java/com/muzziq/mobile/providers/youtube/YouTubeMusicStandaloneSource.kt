@@ -287,11 +287,10 @@ class YouTubeMusicStandaloneSource(context: Context) {
         private const val API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
         private const val BASE_URL = "https://music.youtube.com/youtubei/v1"
         private val JSON = "application/json; charset=utf-8".toMediaType()
-        /** Profil qui fournit actuellement un flux audio direct sans jeton. */
-        const val PLAYBACK_USER_AGENT =
-            "com.google.ios.youtube/21.03.1 (iPhone16,2; U; CPU iOS 18_2 like Mac OS X;)"
+        /** Secours brut uniquement : le chemin normal passe par l'extracteur.
+         * Les flux iOS imposent des plages bornées et ne sont donc pas remis à
+         * un DataSource progressif standard. */
         private val playbackProfiles = listOf(
-            PlaybackProfile("IOS", "21.03.1", "5", PLAYBACK_USER_AGENT, "audio/mp4"),
             PlaybackProfile(
                 "ANDROID", "20.10.38", "3",
                 "com.google.android.youtube/20.10.38 (Linux; U; Android 14)", "audio/webm"
