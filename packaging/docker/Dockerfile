@@ -46,6 +46,25 @@ RUN addgroup -g 1001 muzziq && adduser -u 1001 -G muzziq -S muzziq
 RUN apk add --no-cache su-exec ca-certificates yt-dlp \
     && yt-dlp --version
 
+# Chromium pour le chemin PoToken + UMP (src/providers/youtube-music/
+# poTokenBrowser.ts, docs/reverse-engineering/youtube-music/README.md).
+# AVERTISSEMENT HONNÊTE, NON VÉRIFIÉ : contrairement à yt-dlp ci-dessus, ce
+# bloc n'a PAS été validé par un build Docker réel dans la session qui l'a
+# écrit (faute de temps) — il applique seulement le même correctif déjà connu
+# pour yt-dlp (le binaire Chromium officiel de Playwright est lié à glibc et
+# ne tourne pas sur Alpine/musl, donc on utilise le paquet Chromium du dépôt
+# Alpine — musl-natif — plutôt que `npx playwright install`) et pointe
+# `MUZZIQ_CHROMIUM_PATH` dessus. À vérifier par un vrai build + un vrai appel
+# avant de considérer ce chemin fiable en production (règle #5 du projet :
+# jamais faire confiance à une capacité déclarée sans l'avoir testée en
+# exécution réelle). Poids réel non mesuré non plus, mais Chromium ajoute de
+# l'ordre de 300-400 Mo à l'image — coût assumé, pas cassé silencieusement :
+# si ce paquet ne fonctionne pas ou est absent, `poTokenBrowser.ts` échoue
+# proprement (capturé, jamais fatal) et la résolution retombe sur yt-dlp.
+RUN apk add --no-cache chromium \
+    && chromium-browser --version || chromium --version || true
+ENV MUZZIQ_CHROMIUM_PATH=/usr/bin/chromium-browser
+
 COPY --from=builder --chown=muzziq:muzziq /app/.next/standalone ./
 COPY --from=builder --chown=muzziq:muzziq /app/.next/static ./.next/static
 COPY --from=builder --chown=muzziq:muzziq /app/public ./public
