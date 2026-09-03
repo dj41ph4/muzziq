@@ -17,14 +17,16 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 export type RepeatMode = "off" | "all" | "one";
 
 export interface PlayableTrack {
-  kind: "local" | "provider";
-  /** fileId (local) ou providerTrackId (provider). */
+  kind: "local" | "offline" | "provider";
+  /** fileId (local), id de téléchargement hors ligne (offline) ou providerTrackId (provider). */
   id: string;
   title: string;
   artist: string;
   album?: string;
   thumbnailUrl?: string;
   durationSeconds?: number;
+  /** Recording MuzziQ d'origine, quand connu — permet d'agir sur le morceau (ex. téléchargement hors ligne) sans dépendre de kind/id qui varient selon la source résolue. */
+  recordingId?: string;
 }
 
 interface PlayerState {
@@ -78,14 +80,14 @@ async function recordPlayStartEvent(track: PlayableTrack) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        provider: track.kind === "local" ? "local" : "youtube-music",
+        provider: track.kind === "provider" ? "youtube-music" : "local",
         providerTrackId: track.id,
         title: track.title,
         artist: track.artist,
         album: track.album,
         durationSeconds: track.durationSeconds,
         type: "PLAY_START",
-        source: track.kind === "local" ? "LOCAL" : "PROVIDER",
+        source: track.kind === "provider" ? "PROVIDER" : "LOCAL",
       }),
     });
   } catch {
@@ -126,6 +128,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       let url: string;
       if (track.kind === "local") {
         url = `/api/stream/${track.id}`;
+      } else if (track.kind === "offline") {
+        url = `/api/offline/${track.id}/stream`;
       } else {
         const res = await fetch(`/api/play/${track.id}`);
         const body = await res.json();

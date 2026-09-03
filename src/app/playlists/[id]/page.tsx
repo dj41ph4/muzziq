@@ -4,6 +4,7 @@ import { use } from "react";
 import useSWR from "swr";
 import { X, Music2, Play, Pause } from "lucide-react";
 import { usePlayer, type PlayableTrack } from "@/components/PlayerContext";
+import { OfflineDownloadButton } from "@/components/OfflineDownloadButton";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -35,8 +36,17 @@ export default function PlaylistDetailPage({ params }: { params: Promise<{ id: s
     if (!r) return null;
     const res = await fetch(`/api/recordings/${item.recordingId}/resolve`);
     if (!res.ok) return null; // Playback Resolver n'a trouvé aucune source réelle — jamais fabriquer une lecture qui ne marchera pas.
-    const resolved: { kind: "local" | "provider"; id: string } = await res.json();
-    return { kind: resolved.kind, id: resolved.id, title: r.title, artist: r.artist, album: r.album, thumbnailUrl: r.thumbnailUrl, durationSeconds: r.durationSeconds };
+    const resolved: { kind: "local" | "offline" | "provider"; id: string } = await res.json();
+    return {
+      kind: resolved.kind,
+      id: resolved.id,
+      title: r.title,
+      artist: r.artist,
+      album: r.album,
+      thumbnailUrl: r.thumbnailUrl,
+      durationSeconds: r.durationSeconds,
+      recordingId: item.recordingId,
+    };
   }
 
   async function playItem(item: PlaylistItemView) {
@@ -143,8 +153,9 @@ export default function PlaylistDetailPage({ params }: { params: Promise<{ id: s
 
               <div className="hidden min-w-0 truncate text-[13px] text-[var(--ink-soft)] sm:block">{r.album ?? "—"}</div>
 
-              <div className="flex items-center justify-end gap-2">
-                <span className="font-mono text-[12px] tabular-nums text-[var(--ink-dim)]">{fmtDuration(r.durationSeconds)}</span>
+              <div className="flex items-center justify-end gap-1">
+                <span className="mr-1 font-mono text-[12px] tabular-nums text-[var(--ink-dim)]">{fmtDuration(r.durationSeconds)}</span>
+                <OfflineDownloadButton track={{ recordingId: item.recordingId, title: r.title, artist: r.artist, album: r.album }} size={14} />
                 <button
                   onClick={() => removeItem(item.id)}
                   className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-[var(--ink-dim)] opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-400 group-hover:opacity-100"

@@ -3,14 +3,16 @@
 import useSWR from "swr";
 import { useState } from "react";
 import Link from "next/link";
-import { RefreshCw, Music2, X, Clock, HardDrive, ListMusic, Download, Sparkles, Settings } from "lucide-react";
+import { RefreshCw, Music2, X, Clock, HardDrive, ListMusic, Download, DownloadCloud, Sparkles, Settings } from "lucide-react";
 import type { MediaFile } from "@/lib/library/mediaFilesStore";
 import { usePlayer, type PlayableTrack } from "@/components/PlayerContext";
 import { TopBar } from "@/components/TopBar";
+import { OfflineDownloadButton } from "@/components/OfflineDownloadButton";
 
 const SHORTCUTS = [
   { href: "/playlists", label: "Playlists", Icon: ListMusic },
   { href: "/downloads", label: "Téléchargements", Icon: Download },
+  { href: "/offline", label: "Hors ligne", Icon: DownloadCloud },
   { href: "/assistant", label: "Assistant", Icon: Sparkles },
   { href: "/settings", label: "Réglages", Icon: Settings },
 ];
@@ -220,6 +222,12 @@ export default function LibraryPage() {
                     <span className="hidden rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-bold text-[var(--ink-dim)] sm:inline">
                       {item.addPolicy}
                     </span>
+                    {item.recording && (
+                      <OfflineDownloadButton
+                        track={{ recordingId: item.recordingId, title: item.recording.title, artist: item.recording.artist, album: item.recording.album }}
+                        size={14}
+                      />
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();

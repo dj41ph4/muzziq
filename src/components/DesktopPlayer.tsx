@@ -2,6 +2,7 @@
 
 import { Play, Pause, Loader2, Music2, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Volume2, Volume1, VolumeX } from "lucide-react";
 import { usePlayer } from "./PlayerContext";
+import { OfflineDownloadButton } from "./OfflineDownloadButton";
 
 function fmt(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -148,6 +149,12 @@ export function DesktopPlayer() {
 
         {/* Volume */}
         <div className="flex items-center justify-end gap-2">
+          {track.recordingId && (
+            <OfflineDownloadButton
+              track={{ recordingId: track.recordingId, title: track.title, artist: track.artist, album: track.album }}
+              size={15}
+            />
+          )}
           <VolumeIcon size={16} className="text-[var(--ink-dim)]" />
           <input
             type="range"
