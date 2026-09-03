@@ -27,11 +27,11 @@ interface InnertubeContext {
   };
 }
 
-function baseContext(): InnertubeContext {
+function baseContext(clientName = "WEB_REMIX", clientVersion = CLIENT_VERSION): InnertubeContext {
   return {
     client: {
-      clientName: "WEB_REMIX",
-      clientVersion: CLIENT_VERSION,
+      clientName,
+      clientVersion,
       hl: "en",
       gl: "US",
     },
@@ -48,7 +48,7 @@ export class InnertubeError extends Error {
   }
 }
 
-async function post<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+async function post<T>(endpoint: string, body: Record<string, unknown>, context = baseContext()): Promise<T> {
   const url = `${BASE_URL}/${endpoint}?key=${API_KEY}&prettyPrint=false`;
   const res = await fetch(url, {
     method: "POST",
@@ -57,7 +57,7 @@ async function post<T>(endpoint: string, body: Record<string, unknown>): Promise
       Origin: "https://music.youtube.com",
       Referer: "https://music.youtube.com/",
     },
-    body: JSON.stringify({ context: baseContext(), ...body }),
+    body: JSON.stringify({ context, ...body }),
     // Un provider externe ne doit jamais bloquer une requête utilisateur
     // indéfiniment (plan §76) — délai raisonnable, l'appelant décide du repli.
     signal: AbortSignal.timeout(8000),
@@ -85,10 +85,24 @@ export function innertubeSearch(query: string, params?: string): Promise<unknown
  */
 export async function innertubePlayer(videoId: string): Promise<unknown> {
   const sts = await getSignatureTimestamp();
-  return post("player", {
+  const playerBody = {
     videoId,
     contentCheckOk: true,
     racyCheckOk: true,
     ...(sts !== null ? { playbackContext: { contentPlaybackContext: { signatureTimestamp: sts } } } : {}),
-  });
+  };
+
+  // Le client Android public renvoie actuellement les formats audio avec une
+  // URL directe. Il évite le cipher WEB tout en restant un appel InnerTube
+  // officiel et anonyme. WEB_REMIX reste essayé si ce comportement évolue.
+  try {
+    const android = await post("player", playerBody, baseContext("ANDROID", "20.10.38"));
+    if ((android as { playabilityStatus?: { status?: string } })?.playabilityStatus?.status === "OK") {
+      return android;
+    }
+  } catch {
+    // Le chemin WEB_REMIX ci-dessous conserve la compatibilité de secours.
+  }
+
+  return post("player", playerBody);
 }

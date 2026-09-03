@@ -1,6 +1,7 @@
 import { innertubePlayer } from "./innertubeClient";
 import { resolveStreamUrl } from "./ytDlpResolver";
 import { resolveViaPotUmp } from "./potUmpResolver";
+import { decipherSignature } from "./signatureCipher";
 import type { PlaybackResolution } from "@/lib/contracts/music";
 
 /**
@@ -46,7 +47,7 @@ export async function resolveYoutubeMusicPlayback(videoId: string): Promise<Play
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw: any = await innertubePlayer(videoId).catch(() => null);
 
-  const innertubeResult = tryInnertube(raw);
+  const innertubeResult = await tryInnertube(raw);
   if (innertubeResult) return innertubeResult;
 
   const potUmpResult = await tryPotUmp(videoId, raw);
@@ -64,21 +65,23 @@ export async function resolveYoutubeMusicPlayback(videoId: string): Promise<Play
 }
 
 /**
- * Renvoie une résolution si InnerTube a réussi avec un `url` en clair, ou
- * `null` pour signaler "tenter le chemin suivant" — cas actuel systématique
- * (`signatureCipher` sans `url`, voir commentaire ci-dessus).
+ * Résout les formats audio InnerTube, d'abord via une URL claire puis via
+ * `signatureCipher`. Le repli externe n'est atteint qu'après l'échec de ces
+ * deux voies InnerTube.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function tryInnertube(raw: any): PlaybackResolution | null {
+async function tryInnertube(raw: any): Promise<PlaybackResolution | null> {
   const status = raw?.playabilityStatus?.status;
 
   if (status === "OK" && raw?.streamingData) {
-    const best = bestAudioFormat(raw);
-    if (best?.url) {
-      return {
-        ok: true,
-        source: { type: "PROVIDER", url: best.url, codec: best.mimeType, bitrate: best.bitrate },
-      };
+    for (const best of bestAudioFormats(raw)) {
+      const url = await resolveFormatUrl(best);
+      if (url) {
+        return {
+          ok: true,
+          source: { type: "PROVIDER", url, codec: best.mimeType, bitrate: best.bitrate },
+        };
+      }
     }
   }
   return null;
@@ -86,13 +89,33 @@ function tryInnertube(raw: any): PlaybackResolution | null {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function bestAudioFormat(raw: any): { url?: string; mimeType?: string; bitrate?: number; contentLength?: string } | null {
-  const audioFormats = (raw?.streamingData?.adaptiveFormats ?? []).filter((f: { mimeType?: string }) =>
+  return bestAudioFormats(raw)[0] ?? null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function bestAudioFormats(raw: any): Array<{ url?: string; signatureCipher?: string; cipher?: string; mimeType?: string; bitrate?: number; contentLength?: string }> {
+  return (raw?.streamingData?.adaptiveFormats ?? []).filter((f: { mimeType?: string }) =>
     f.mimeType?.startsWith("audio")
-  );
-  if (audioFormats.length === 0) return null;
-  return audioFormats.sort(
+  ).sort(
     (a: { bitrate?: number }, b: { bitrate?: number }) => (b.bitrate ?? 0) - (a.bitrate ?? 0)
-  )[0];
+  );
+}
+
+type CipherFormat = { url?: string; signatureCipher?: string; cipher?: string };
+
+async function resolveFormatUrl(format: CipherFormat): Promise<string | null> {
+  if (format.url) return format.url;
+  const cipher = format.signatureCipher ?? format.cipher;
+  if (!cipher) return null;
+  const params = new URLSearchParams(cipher);
+  const encodedUrl = params.get("url");
+  const signature = params.get("s");
+  if (!encodedUrl || !signature) return null;
+  const deciphered = await decipherSignature(signature);
+  if (!deciphered) return null;
+  const url = new URL(encodedUrl);
+  url.searchParams.set(params.get("sp") ?? "sig", deciphered);
+  return url.toString();
 }
 
 /**
