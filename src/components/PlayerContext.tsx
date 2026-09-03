@@ -52,6 +52,8 @@ interface PlayerContextValue extends PlayerState {
   seek: (seconds: number) => void;
   next: () => void;
   previous: () => void;
+  /** Saute directement à une position de `order` (ex. clic sur un morceau de la file d'attente dans le panneau contextuel). */
+  jumpTo: (pos: number) => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
   setVolume: (v: number) => void;
@@ -181,6 +183,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const next = useCallback(() => goTo(1), [goTo]);
 
+  const jumpTo = useCallback(
+    (pos: number) => {
+      const s = stateRef.current;
+      if (pos < 0 || pos >= s.order.length || pos === s.pos) return;
+      const track = s.queue[s.order[pos]];
+      setState((prev) => ({ ...prev, pos }));
+      loadTrack(track);
+    },
+    [loadTrack]
+  );
+
   const previous = useCallback(() => {
     const audio = audioRef.current;
     // Convention lecteur : si plus de 3s écoulées, "précédent" revient au début
@@ -245,6 +258,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         seek,
         next,
         previous,
+        jumpTo,
         toggleShuffle,
         cycleRepeat,
         setVolume,

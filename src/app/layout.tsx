@@ -6,6 +6,7 @@ import { MiniPlayer } from "@/components/MiniPlayer";
 import { DesktopPlayer } from "@/components/DesktopPlayer";
 import { BottomNav } from "@/components/BottomNav";
 import { Sidebar } from "@/components/Sidebar";
+import { ContextPanel } from "@/components/ContextPanel";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,9 +25,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen pb-32 font-sans antialiased lg:pb-28">
         <PlayerProvider>
           <Sidebar />
-          <div className="lg:pl-64">{children}</div>
+          <div className="lg:pl-64 xl:pr-80">{children}</div>
           <MiniPlayer />
           <DesktopPlayer />
+          <ContextPanel />
           <div className="lg:hidden">
             <BottomNav />
           </div>
