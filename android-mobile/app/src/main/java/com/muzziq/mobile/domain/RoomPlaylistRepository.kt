@@ -55,6 +55,7 @@ class RoomPlaylistRepository(context: Context) : PlaylistRepository {
         artworkUrl = artworkUrl,
         source = when (sourceKind) {
             "LOCAL" -> TrackSource.Local(sourceRef)
+            "YOUTUBE" -> TrackSource.YouTube(sourceRef)
             "SPOTIFY" -> TrackSource.Spotify(sourceRef)
             else -> TrackSource.Server(sourceRef)
         },
@@ -72,11 +73,13 @@ class RoomPlaylistRepository(context: Context) : PlaylistRepository {
         sourceKind = when (source) {
             is TrackSource.Server -> "SERVER"
             is TrackSource.Local -> "LOCAL"
+            is TrackSource.YouTube -> "YOUTUBE"
             is TrackSource.Spotify -> "SPOTIFY"
         },
         sourceRef = when (val s = source) {
             is TrackSource.Server -> s.recordingId
             is TrackSource.Local -> s.contentUri
+            is TrackSource.YouTube -> s.videoId
             is TrackSource.Spotify -> s.spotifyTrackId
         },
     )

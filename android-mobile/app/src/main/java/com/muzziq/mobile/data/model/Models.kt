@@ -337,6 +337,8 @@ sealed interface TrackSource {
     data class Server(val recordingId: String) : TrackSource
     /** Mode Standalone — content:// URI MediaStore, jouable directement, aucun réseau. */
     data class Local(val contentUri: String) : TrackSource
+    /** YouTube Music lu directement par l'application Android, sans serveur MuzziQ. */
+    data class YouTube(val videoId: String) : TrackSource
     /** Compte Spotify lié (plan §67, priorité 5) — [spotifyTrackId] est l'id catalogue
      * Spotify brut, JAMAIS un id MuzziQ (règle absolue) : un ProviderMapping fait le
      * lien si/quand ce morceau est identifié comme le même Recording qu'une autre

@@ -57,7 +57,21 @@ export default function PlexSettingsPage() {
     if (pollTimer.current) clearInterval(pollTimer.current);
   }, []);
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 px-5 pt-8 pb-16 sm:px-8">
+        <TopBar title="Plex" />
+        <div className="flex flex-col gap-4">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="glass flex flex-col gap-2 rounded-2xl p-4">
+              <div className="h-3 w-1/4 animate-pulse rounded bg-white/[0.06]" />
+              <div className="h-9 w-2/3 animate-pulse rounded-full bg-white/[0.04]" />
+            </div>
+          ))}
+        </div>
+      </main>
+    );
+  }
 
   const connected = !!data.accountUsername;
   const serverChosen = !!data.serverUrl && !!data.machineIdentifier;

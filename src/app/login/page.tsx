@@ -15,7 +15,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-sm flex-col items-center justify-center gap-6 px-6">
+        <Logo size="lg" animated={false} />
+      </main>
+    );
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

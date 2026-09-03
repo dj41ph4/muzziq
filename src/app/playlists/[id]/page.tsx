@@ -64,7 +64,30 @@ export default function PlaylistDetailPage({ params }: { params: Promise<{ id: s
     await playItem(data.items[0]);
   }
 
-  if (!data) return null;
+  if (!data) {
+    return (
+      <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-8 px-5 pt-8 sm:px-8">
+        <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-end">
+          <div className="art-fallback h-40 w-40 flex-shrink-0 animate-pulse rounded-xl sm:h-48 sm:w-48" />
+          <div className="flex flex-1 flex-col items-center gap-2 sm:items-start">
+            <div className="h-3 w-16 animate-pulse rounded bg-white/[0.06]" />
+            <div className="h-9 w-48 animate-pulse rounded bg-white/[0.08]" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex animate-pulse items-center gap-3 rounded-xl px-3 py-2.5">
+              <div className="h-11 w-11 flex-shrink-0 rounded-lg bg-white/[0.06]" />
+              <div className="flex-1">
+                <div className="h-3 w-2/5 rounded bg-white/[0.06]" />
+                <div className="mt-1.5 h-2.5 w-1/3 rounded bg-white/[0.04]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </main>
+    );
+  }
 
   const totalSeconds = data.items.reduce((sum, it) => sum + (it.recording?.durationSeconds ?? 0), 0);
   const covers = data.items.map((it) => it.recording?.thumbnailUrl).filter(Boolean).slice(0, 4) as string[];

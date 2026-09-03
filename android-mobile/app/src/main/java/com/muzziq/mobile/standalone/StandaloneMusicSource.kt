@@ -4,23 +4,20 @@ import android.content.Context
 import com.muzziq.mobile.data.MusicSource
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
+import com.muzziq.mobile.providers.youtube.YouTubeMusicStandaloneSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Mode Standalone (§56.4) — capacité première de l'app, pas un repli. Aucune
- * dépendance réseau : bibliothèque MediaStore, lecture directe des content://
- * URIs par ExoPlayer, moteur de goût local (LocalTasteDatabase). Aussi complet
- * que ServerMusicSource pour ce que le device peut faire seul — la seule
- * limite honnête est l'absence de recherche/streaming YouTube Music (bloqué
- * PoToken sans repli yt-dlp possible sur Android, voir §56.4 du plan et le
- * message affiché par isStreamingUnavailable()).
+ * Mode Standalone : bibliothèque locale et accès direct à YouTube Music depuis
+ * Android. Le serveur MuzziQ n'est pas requis pour rechercher ou lire un flux.
  */
 class StandaloneMusicSource(context: Context) : MusicSource {
-    override val label: String = "Bibliothèque locale"
+    override val label: String = "Standalone"
 
     private val scanner = LocalLibraryScanner(context)
     private val db = LocalTasteDatabase(context)
+    private val youtube = YouTubeMusicStandaloneSource()
 
     /** À appeler après l'octroi de la permission READ_MEDIA_AUDIO — remplit le cache SQLite
      * depuis MediaStore. Idempotent, peut être relancé (pull-to-refresh bibliothèque). */
@@ -38,13 +35,17 @@ class StandaloneMusicSource(context: Context) : MusicSource {
 
     override suspend fun search(query: String): Result<List<Track>> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext Result.success(emptyList())
-        runCatching { db.searchTracks(query).map { it.toTrack() } }
+        val local = runCatching { db.searchTracks(query).map { it.toTrack() } }.getOrDefault(emptyList())
+        val online = youtube.search(query).getOrDefault(emptyList())
+        Result.success(local + online)
     }
 
     override suspend fun resolvePlayableUri(track: Track): Result<String> {
-        val uri = (track.source as? TrackSource.Local)?.contentUri
-            ?: return Result.failure(IllegalArgumentException("Source de piste invalide en standalone"))
-        return Result.success(uri)
+        return when (val source = track.source) {
+            is TrackSource.Local -> Result.success(source.contentUri)
+            is TrackSource.YouTube -> youtube.resolvePlayableUri(track)
+            else -> Result.failure(IllegalArgumentException("Source de piste invalide en standalone"))
+        }
     }
 
     fun recordPlayback(track: Track, positionMs: Long, durationMs: Long) {
@@ -90,9 +91,7 @@ class StandaloneMusicSource(context: Context) : MusicSource {
     companion object {
         /** Message honnête affiché dans l'UI plutôt qu'un bouton Play mort (§56.4). */
         const val STREAMING_UNAVAILABLE_NOTICE =
-            "En local, MuzziQ lit ta bibliothèque sur l'appareil. La recherche/lecture " +
-                "YouTube Music nécessite un serveur MuzziQ connecté (yt-dlp n'est pas " +
-                "disponible sur Android)."
+            "Le mode standalone peut rechercher et lire YouTube Music directement depuis Android."
     }
 }
 
