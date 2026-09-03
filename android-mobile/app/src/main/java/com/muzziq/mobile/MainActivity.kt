@@ -172,6 +172,8 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             val isPlaying by vm.player.isPlaying.collectAsStateWithLifecycle()
             val positionMs by vm.player.positionMs.collectAsStateWithLifecycle()
             val durationMs by vm.player.durationMs.collectAsStateWithLifecycle()
+            val playerQueue by vm.player.queue.collectAsStateWithLifecycle()
+            val playerQueueIndex by vm.player.queueIndex.collectAsStateWithLifecycle()
             val favoriteIds by vm.favoriteTrackIds.collectAsStateWithLifecycle()
             val downloadedIds by vm.downloadedTrackIds.collectAsStateWithLifecycle()
             val downloadingIds by vm.downloadingTrackIds.collectAsStateWithLifecycle()
@@ -315,6 +317,10 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             isDownloading = track.id in downloadingIds,
                             onToggleDownload = { vm.requestDownload(track) },
                             onAddToPlaylist = { showPlaylistPicker = true },
+                            queue = playerQueue,
+                            queueIndex = playerQueueIndex,
+                            onJumpToQueueIndex = { vm.player.jumpToQueueIndex(it) },
+                            lyricsProvider = vm.lyricsProvider,
                         )
                     }
                 }

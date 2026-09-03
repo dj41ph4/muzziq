@@ -240,6 +240,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val standalone: StandaloneMusicSource by lazy { StandaloneMusicSource(application) }
     private val queueStateStore by lazy { QueueStateStore(application) }
 
+    /** Paroles (onglet plein écran) — [com.muzziq.mobile.domain.NullLyricsProvider] est la
+     * seule implémentation existante de LyricsProvider aujourd'hui (aucune route serveur
+     * `/api/lyrics`, aucun fournisseur tiers branché, plan §38 jamais commencé) : LyricsPanel
+     * affiche donc honnêtement "non disponible" plutôt qu'un texte inventé. Remplacer cette
+     * ligne suffira le jour où un vrai fournisseur existe. */
+    val lyricsProvider: com.muzziq.mobile.domain.LyricsProvider by lazy { com.muzziq.mobile.domain.NullLyricsProvider() }
+
     /** Favoris — Room, indépendants du mode (§56.4) et du serveur. Premier vrai
      * consommateur du schéma Room posé plus tôt (data/room/). */
     private val favorites: RoomFavoriteRepository by lazy { RoomFavoriteRepository(application) }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
@@ -53,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
+import com.muzziq.mobile.domain.LyricsProvider
+import com.muzziq.mobile.ui.common.MuzziQFilterChip
 import com.muzziq.mobile.ui.common.Skeleton
 import com.muzziq.mobile.ui.palette.rememberDominantColor
 import com.muzziq.mobile.ui.theme.MuzziQColors
@@ -135,10 +138,24 @@ fun SharedTransitionScope.MiniPlayer(
     }
 }
 
+/** Panneaux du plein écran (§56.1) — Lecture reste l'onglet par défaut à l'ouverture (c'est
+ * lui qui porte la transition d'élément partagé sur la pochette). */
+private enum class PlayerPanel(val label: String) {
+    NOW_PLAYING("Lecture"),
+    LYRICS("Paroles"),
+    QUEUE("Queue"),
+}
+
 /**
  * Plein écran lecteur (§56.1) : pochette large, dégradé dynamique par pochette
  * infusant le fond vers le noir, contrôles principaux + barre de progression.
- * Paroles/file d'attente/appareils par onglets restent un chantier suivant.
+ * Onglets Paroles/Queue (voir [LyricsPanel]/[QueuePanel]) — Queue reflète la vraie file
+ * d'attente de PlaybackService (jamais une liste fictive : un morceau isolé sans liste
+ * autour affiche un état vide honnête plutôt qu'un faux onglet, voir QueuePanel). Paroles
+ * consomme le contrat [LyricsProvider] déjà posé (domain/Repositories.kt), aujourd'hui sans
+ * fournisseur réel branché (NullLyricsProvider) — affiché honnêtement, jamais de texte
+ * inventé. Slider + contrôles de lecture restent visibles sur les trois onglets (façon
+ * Spotify : on garde la main sur la lecture même en consultant Paroles/Queue).
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -159,9 +176,14 @@ fun SharedTransitionScope.PlayerScreen(
     isDownloading: Boolean,
     onToggleDownload: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    queue: List<Track>,
+    queueIndex: Int,
+    onJumpToQueueIndex: (Int) -> Unit,
+    lyricsProvider: LyricsProvider,
 ) {
     val dominant = rememberDominantColor(track.artworkUrl)
     val animatedDominant by animateFloatAsState(targetValue = 1f, animationSpec = tween(600), label = "grad")
+    var panel by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(PlayerPanel.NOW_PLAYING) }
 
     Box(
         Modifier
@@ -175,10 +197,31 @@ fun SharedTransitionScope.PlayerScreen(
             ),
     ) {
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(20.dp)) {
-            IconButton(onClick = onCollapse) {
-                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = MuzziQColors.TextPrimary)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onCollapse) {
+                    Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = MuzziQColors.TextPrimary)
+                }
+                Row(
+                    Modifier.weight(1f).padding(start = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PlayerPanel.entries.forEach { p ->
+                        MuzziQFilterChip(label = p.label, selected = panel == p, onClick = { panel = p })
+                    }
+                }
             }
 
+            if (panel != PlayerPanel.NOW_PLAYING) {
+                Box(Modifier.weight(1f).padding(top = 20.dp)) {
+                    when (panel) {
+                        PlayerPanel.LYRICS -> LyricsPanel(track = track, lyricsProvider = lyricsProvider)
+                        PlayerPanel.QUEUE -> QueuePanel(queue = queue, currentIndex = queueIndex, onJumpTo = onJumpToQueueIndex)
+                        PlayerPanel.NOW_PLAYING -> Unit
+                    }
+                }
+            }
+
+            if (panel == PlayerPanel.NOW_PLAYING) {
             Box(Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
                 val coverModifier = Modifier
                     .fillMaxWidth(0.82f)
@@ -252,6 +295,7 @@ fun SharedTransitionScope.PlayerScreen(
                 IconButton(onClick = onAddToPlaylist) {
                     Icon(Icons.Rounded.PlaylistAdd, contentDescription = "Ajouter à une playlist", tint = MuzziQColors.TextMuted)
                 }
+            }
             }
 
             var sliderPosition by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(positionMs.toFloat()) }
