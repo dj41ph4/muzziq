@@ -19,7 +19,7 @@ export function MiniPlayer() {
   const pct = duration > 0 ? (progress / duration) * 100 : 0;
 
   return (
-    <div className="glass float-in fixed inset-x-0 bottom-14 z-40 border-x-0 border-b-0 shadow-[var(--shadow-float)]">
+    <div className="glass float-in fixed inset-x-0 bottom-14 z-40 border-x-0 border-b-0 shadow-[var(--shadow-float)] lg:bottom-0 lg:left-64">
       <div
         className="group/bar relative h-1 cursor-pointer bg-white/[0.06]"
         onClick={(e) => {

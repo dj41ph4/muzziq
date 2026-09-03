@@ -4,6 +4,7 @@ import "./globals.css";
 import { PlayerProvider } from "@/components/PlayerContext";
 import { MiniPlayer } from "@/components/MiniPlayer";
 import { BottomNav } from "@/components/BottomNav";
+import { Sidebar } from "@/components/Sidebar";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,11 +20,14 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={inter.variable}>
-      <body className="min-h-screen pb-32 font-sans antialiased">
+      <body className="min-h-screen pb-32 font-sans antialiased lg:pb-24">
         <PlayerProvider>
-          {children}
+          <Sidebar />
+          <div className="lg:pl-64">{children}</div>
           <MiniPlayer />
-          <BottomNav />
+          <div className="lg:hidden">
+            <BottomNav />
+          </div>
         </PlayerProvider>
       </body>
     </html>
