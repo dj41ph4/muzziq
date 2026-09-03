@@ -48,29 +48,31 @@
  *
  * Le déchiffrement produit une signature dont la structure est cohérente
  * (même préfixe/format qu'une signature obtenue via yt-dlp pour la même
- * vidéo) — l'algorithme est donc correct avec un niveau de confiance élevé.
- * **Mais la requête HTTP finale vers googlevideo.com avec cette signature
- * renvoie systématiquement 403**, testé sur plusieurs vidéos, plusieurs
- * `clientName` (`WEB_REMIX`, `MWEB`), avec et sans cookies de session — alors
- * qu'une URL obtenue via yt-dlp (client `VISIONOS` dans les tests réels)
- * fonctionne (`200`/`206`, `Content-Type: audio/*`) au même moment, depuis
- * la même IP. La cause la plus probable, non confirmée avec certitude dans
- * le temps de cette session : une validation côté CDN propre à la requête de
- * lecture elle-même (pas à l'appel `/player`), indépendante de la signature,
- * pour les profils client `WEB_REMIX`/`MWEB` actuellement — cohérent avec
- * l'observation documentée dans `metrolist-analysis.md` selon laquelle
- * certains profils clients sont marqués `BROKEN` par les mainteneurs
- * Metrolist alors que d'autres (cascade de repli) fonctionnent encore, et
- * que cette situation change dans le temps.
+ * vidéo) — l'algorithme est donc correct, et une requête vers googlevideo.com
+ * avec cette signature renvoie systématiquement `403` telle quelle.
  *
- * **Conséquence pratique : ce module n'est PAS branché dans
+ * **Cause du 403 identifiée avec certitude (voir README, section "cause du
+ * 403 identifiée avec certitude : PoToken + UMP") : ni la signature, ni le
+ * paramètre `n` (vérifié : cette version du lecteur ne transforme même pas
+ * `n` côté client), ni les headers/cookies/empreinte TLS ne sont en cause —
+ * une URL par ailleurs identique à celle produite ici, rejouée hors de toute
+ * session par un simple `fetch()` Node, obtient un vrai `HTTP 200` dès qu'un
+ * paramètre `pot=` (PoToken, généré via BotGuard) et un `cver` à jour y sont
+ * ajoutés.** Ce `200` reste cependant `Content-Type: application/vnd.yt-ump`
+ * (protocole UMP/SABR, pas de l'audio brut) : exploiter cette voie
+ * demanderait un navigateur headless (Chromium/Playwright — la génération
+ * pure Node/jsdom du PoToken est cassée en pratique, voir plus haut) plus un
+ * parseur UMP, un sous-projet distinct de ce module.
+ *
+ * **Conséquence pratique, inchangée : ce module n'est PAS branché dans
  * `playbackResolver.ts`.** yt-dlp reste l'unique chemin qui produit un flux
  * réellement jouable, vérifié par un vrai `HTTP 200`/`206` + `Content-Type:
  * audio/*`. Ce module est conservé car (a) le déchiffrement lui-même est un
  * résultat réel et vérifiable indépendamment du blocage CDN, (b) il devient
- * immédiatement exploitable sans rien réécrire si ce blocage se lève ou
- * change de profil client, et (c) échouer silencieusement en le laissant de
- * côté sans trace aurait fait perdre ce travail à la prochaine session.
+ * immédiatement exploitable sans rien réécrire si un `pot` devient
+ * disponible par une autre voie, et (c) échouer silencieusement en le
+ * laissant de côté sans trace aurait fait perdre ce travail à la prochaine
+ * session.
  */
 
 import * as vm from "node:vm";

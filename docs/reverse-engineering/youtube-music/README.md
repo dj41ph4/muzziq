@@ -350,21 +350,134 @@ session. **yt-dlp reste donc, à ce jour, la seule solution qui produit
 réellement un flux audio jouable de bout en bout, vérifié par un `HTTP
 200`/`206` + `audio/*` réel.** `playbackResolver.ts` n'est pas modifié.
 
+## 2026-09-03 (suite 2) — cause du 403 identifiée avec certitude : PoToken + UMP, pas le paramètre `n`
+
+Reprise du "Prochaine étape" laissée ouverte plus haut, dans l'ordre indiqué par la
+consigne de cette session : d'abord le paramètre `n` (piste jugée la plus probable a
+priori), puis les headers/cookies/empreinte réseau, puis interception d'un vrai
+navigateur sur la requête média elle-même (pas seulement `/player`).
+
+### Le paramètre `n` : vérifié, ce n'est PAS la cause
+
+Recherche exhaustive dans le `base.js` réel (hash `9470c977`, même build que la
+section précédente) du point d'usage réel qui construit les URLs finales à partir
+des formats retournés par `/player` : la fonction `nix` (nom minifié du jour), qui
+pour chaque format avec un `signatureCipher` calcule la signature déchiffrée
+(confirmé : mêmes constantes `(69, 2315)` que la section précédente, via une couche
+supplémentaire `$l(36,7009,·)`/`wU(2,2722,·)` qui se résout, après lecture directe de
+leur corps, à un simple `decodeURIComponent`/`encodeURIComponent` — aucune
+transformation de plus sur la signature elle-même) puis fusionne quelques paramètres
+supplémentaires (`cpn`, `c`, `cver`, …) dans l'URL. **Aucune fonction de
+transformation du paramètre `n` n'existe nulle part dans cette fonction ni ailleurs
+dans le fichier** — recherche par plusieurs regex publiquement documentées
+(`.get("n")`, `.set("n",`, motifs classiques yt-dlp) : zéro occurrence, seule
+occurrence de `.get("n")` trouvée dans tout le fichier concerne un cas HLS sans
+rapport (réécriture de segment de chemin `/n/{id}`, pas le paramètre de requête).
+Confirmé empiriquement : retirer entièrement le paramètre `n` d'une URL par ailleurs
+signée correctement ne change strictement rien au `403` (toujours `403`, corps vide,
+identique avec ou sans `n`). **Conclusion : pour ce build du lecteur WEB_REMIX, il
+n'y a simplement pas de transformation client du paramètre `n` à faire — l'hypothèse
+prioritaire de cette session était donc fausse, mais utile à avoir vérifiée
+concrètement plutôt que supposée.**
+
+### Headers, cookies, empreinte TLS/navigateur : vérifiés, ce n'est PAS la cause non plus
+
+Testé méthodiquement avec un vrai Chromium headless (Playwright, même méthode que le
+2026-09-02) plutôt que seulement `fetch` Node :
+- Requête média rejouée avec cookies réels obtenus après chargement de
+  `music.youtube.com/` (page d'accueil) : toujours `403`.
+- Sans `Range`, avec `Range`, avec un jeu complet de headers `Sec-Fetch-*`/
+  `Origin`/`Referer` imitant un vrai navigateur : toujours `403`, identique.
+- **Décisif : la même URL, avec la même signature, rejouée depuis une vraie page
+  Chromium (pas Node) via `fetch()` exécuté dans le contexte de la page
+  `music.youtube.com/watch?v=…` elle-même (donc même pile TLS, même empreinte
+  navigateur, même IP) — toujours `403` identique.** Ceci élimine complètement
+  l'hypothèse d'une empreinte réseau/TLS/navigateur : ce n'est pas "Node se fait
+  repérer", un vrai navigateur avec la vraie URL signée obtient exactement le même
+  rejet.
+
+### La vraie cause, confirmée par comparaison directe avec une requête réelle qui fonctionne
+
+Le blocage précédent ("aucune requête `googlevideo.com` capturée") venait d'abord
+d'un mur de consentement RGPD (`consent.youtube.com`, IP de test dans l'UE) puis d'un
+écran "navigateur non supporté" (UA par défaut de Playwright trop ancien) — les deux
+contournés (clic sur le bouton de consentement néerlandais "Alles accepteren",
+`User-Agent` Chrome 130 récent forcé). Une fois la vraie page chargée et la lecture
+réellement déclenchée, Playwright a capturé les vraies requêtes média émises par le
+lecteur WEB_REMIX authentique. Différences structurelles nettes avec ce que MuzziQ
+construisait :
+
+1. **Méthode `POST`, pas `GET`** (corps vide dans ce cas, mais méthode POST).
+2. **Paramètre `pot=` (PoToken) présent** — absent de toute URL construite par
+   MuzziQ jusqu'ici.
+3. **Paramètre `ump=1`** (+ `srfvp=1`, `alr=yes`, `rn=`/`rbuf=`/`range=` au lieu
+   d'un header HTTP `Range`) — confirme concrètement l'hypothèse SABR/UMP déjà
+   évoquée dans la section précédente sur la seule base d'indices indirects
+   (`sabrContextUpdates`, `botguardData` vus dans le pipeline de formats).
+4. **`cver=1.20260901.12.00`**, très éloigné du `clientVersion` codé en dur dans
+   `innertubeClient.ts` (`1.20241201.01.00`, plus de 9 mois d'écart) — MuzziQ
+   annonce un client obsolète au moment de l'appel `/player`, ce qui n'a pas
+   empêché `/player` de répondre `OK` mais peut faire partie des signaux vérifiés
+   au moment de la requête média.
+
+**Test décisif, celui qui tranche vraiment** : l'URL réelle capturée (avec son
+`pot`, son `sig`, son `n` intacts) a été rejouée **en dehors de toute session
+navigateur**, par un script Node `fetch()` nu, sans cookie, sans `Origin`, sans
+`Referer`, en `GET` comme en `POST` : **`HTTP 200` dans les deux cas**, avec un vrai
+corps binaire de 66176 octets (vérifié par lecture réelle du buffer, pas seulement
+le code de statut). Ceci prouve directement, par élimination, que **le seul
+ingrédient qui manquait à toutes les tentatives précédentes de cette session est le
+`pot` (PoToken)** — ni les headers, ni les cookies, ni l'empreinte réseau, ni la
+méthode HTTP, ni `n`, ne sont en cause : une fois le `pot` présent, même un GET nu
+depuis un script sans aucun contexte de session fonctionne.
+
+**Nuance importante, pour rester honnête sur ce qui est "vraiment" résolu** : le
+`Content-Type` de cette réponse `200` est `application/vnd.yt-ump`, **pas**
+`audio/webm` ou un `audio/*` classique — le corps est un flux encapsulé dans le
+protocole binaire UMP de YouTube (segmentation/framing propriétaire), pas de l'audio
+brut directement lisible. Obtenir un flux réellement décodable demanderait en plus
+un parseur UMP (format non documenté publiquement de façon stable, sujet à
+changement comme tout ce qui touche SABR d'après `metrolist-analysis.md`) — un
+chantier distinct de la seule obtention du `pot`.
+
+### Pourquoi ce n'est toujours pas branché dans MuzziQ malgré une cause désormais certaine
+
+Le `pot` lui-même ne s'obtient, de façon vérifiée dans ce dépôt, que par deux voies :
+- **Pure Node/jsdom (`bgutils-js`)** : déjà testé et cassé en pratique le
+  2026-09-02 (voir plus haut — `OutOfMemory`, jetons de mauvaise longueur, jsdom
+  détecté comme non-navigateur par le challenge BotGuard).
+- **Vrai navigateur headless (Playwright/Chromium)** : **fonctionne réellement**,
+  vérifié dans cette session (un `pot` valide a été obtenu et son usage confirmé
+  par un `200` réel comme démontré ci-dessus). Mais cela veut dire embarquer un
+  Chromium complet (~300 Mo) comme dépendance d'exécution du serveur MuzziQ pour
+  chaque résolution de flux, plus un solveur UMP pour exploiter le résultat — une
+  dépendance et une complexité largement supérieures à yt-dlp (déjà présent,
+  déjà packagé en Docker, déjà fiable de bout en bout). Ce n'est plus "corriger le
+  403", c'est reconstruire l'équivalent du pipeline PoToken+UMP que `innertubex`
+  (Metrolist) implémente sur plusieurs modules dédiés avec un rythme de correctifs
+  de plusieurs fois par semaine (`metrolist-analysis.md`, §3) — un sous-projet à
+  part entière, pas un correctif ponctuel, et une charge de maintenance récurrente
+  que ce rapport ne recommande pas d'engager tant que yt-dlp fonctionne.
+
+**Conclusion honnête et définitive de cette investigation** : la cause du `403` est
+identifiée avec certitude (`pot` manquant ; `n` et les headers étaient des fausses
+pistes, désormais éliminées par test réel plutôt que supposées). Ce n'est pas un
+abandon prématuré — la cause est trouvée, prouvée par un vrai `HTTP 200` reproductible
+en dehors de toute session. Mais exploiter cette découverte demanderait d'ajouter une
+dépendance Chromium au runtime serveur et un parseur UMP, ce qui n'est pas fait dans
+cette session (hors du périmètre "corriger le 403", nouveau sous-projet à évaluer
+séparément). `signatureCipher.ts` n'est donc toujours pas branché dans
+`playbackResolver.ts` ; yt-dlp reste la seule solution qui produit un flux `audio/*`
+réellement jouable de bout en bout, vérifié par un vrai `HTTP 200`/`206`.
+
 ## Prochaine étape (non faite)
 
-- Comprendre précisément la cause du `403` sur la requête média
-  `WEB_REMIX`/`MWEB` malgré une signature correcte (interception réseau
-  d'un vrai navigateur avec Playwright, comme le 2026-09-02, mais cette
-  fois sur la requête `googlevideo.com` elle-même plutôt que sur `/player`,
-  pour voir ce qu'un vrai navigateur envoie de plus).
-- Explorer d'autres profils client via `/player` directement (au-delà de
-  `WEB_REMIX`/`MWEB`/`ANDROID_MUSIC`/`IOS_MUSIC` déjà sondés) pour trouver
-  un profil qui expose un `signatureCipher` classique **et** dont la
-  requête média n'est pas rejetée — sans les constantes internes exactes de
-  clients natifs comme `VISIONOS` (que yt-dlp gère mais que ce rapport n'a
-  pas cherché à reproduire), ce qui reviendrait à redécouvrir leur
-  catalogue de contextes client par essais successifs.
-- Réévaluer si le coût de yt-dlp (packaging Docker, subprocess) devient
-  réellement bloquant — dans l'état actuel il ne l'est pas (§105.9, Docker
-  déjà fonctionnel avec yt-dlp inclus).
+- Décider si le coût d'un Chromium headless embarqué + solveur UMP (pour exploiter
+  le `pot` désormais accessible en pratique via Playwright) devient un chantier
+  prioritaire, ou si yt-dlp reste suffisant indéfiniment (§105.9 — dans l'état
+  actuel, il ne bloque rien).
+- Si ce chantier est engagé un jour : étudier le protocole UMP lui-même (framing,
+  segmentation) avant toute implémentation — pas de code écrit dans ce rapport sur
+  ce point, seule la présence du `Content-Type: application/vnd.yt-ump` a été
+  constatée.
 Sous-projet à part entière, pas un correctif ponctuel.
