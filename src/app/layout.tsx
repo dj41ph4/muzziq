@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { PlayerProvider } from "@/components/PlayerContext";
 import { MiniPlayer } from "@/components/MiniPlayer";
+import { DesktopPlayer } from "@/components/DesktopPlayer";
 import { BottomNav } from "@/components/BottomNav";
 import { Sidebar } from "@/components/Sidebar";
 
@@ -20,11 +21,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={inter.variable}>
-      <body className="min-h-screen pb-32 font-sans antialiased lg:pb-24">
+      <body className="min-h-screen pb-32 font-sans antialiased lg:pb-28">
         <PlayerProvider>
           <Sidebar />
           <div className="lg:pl-64">{children}</div>
           <MiniPlayer />
+          <DesktopPlayer />
           <div className="lg:hidden">
             <BottomNav />
           </div>
