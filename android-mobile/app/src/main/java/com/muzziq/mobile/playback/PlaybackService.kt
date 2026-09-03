@@ -77,7 +77,13 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        // Les URLs audio directes sont émises par le client InnerTube Android.
+        // Media3 doit conserver une empreinte de client média cohérente quand il
+        // ouvre ensuite ces URLs (Range est ajouté par OkHttpDataSource lui-même).
         val httpDataSourceFactory = OkHttpDataSource.Factory(okhttp3.OkHttpClient())
+            .setDefaultRequestProperties(
+                mapOf("User-Agent" to "com.google.android.youtube/20.10.38 (Linux; U; Android 14)")
+            )
         val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 

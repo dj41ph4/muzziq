@@ -129,7 +129,13 @@ class YouTubeMusicStandaloneSource {
             ?: watchVideoId(renderer.optJSONObject("overlay"))
             ?: return null
         val artist = artistFromColumns(flex).ifBlank { inheritedArtist.orEmpty() }.ifBlank { "Artiste inconnu" }
-        return Track(id, title, artist, source = TrackSource.YouTube(id))
+        return Track(
+            id = id,
+            title = title,
+            artist = artist,
+            artworkUrl = artworkUrl(renderer, id),
+            source = TrackSource.YouTube(id),
+        )
     }
 
     private fun artistFromColumns(columns: JSONArray?): String {
@@ -159,6 +165,21 @@ class YouTubeMusicStandaloneSource {
             }
         }
         return null
+    }
+
+    private fun artworkUrl(renderer: JSONObject, videoId: String): String {
+        val thumbnails = renderer.optJSONObject("thumbnail")
+            ?.optJSONObject("musicThumbnailRenderer")
+            ?.optJSONObject("thumbnail")
+            ?.optJSONArray("thumbnails")
+        val fromResponse = thumbnails?.let { items ->
+            (0 until items.length())
+                .mapNotNull { items.optJSONObject(it) }
+                .maxByOrNull { it.optInt("width", 0) }
+                ?.optString("url")
+                ?.takeIf { it.isNotBlank() }
+        }
+        return fromResponse ?: "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
     }
 
     private fun runsText(node: JSONObject?): String {

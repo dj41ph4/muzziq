@@ -6,6 +6,8 @@ import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
 import com.muzziq.mobile.providers.youtube.YouTubeMusicStandaloneSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 
 /**
@@ -33,12 +35,24 @@ class StandaloneMusicSource(context: Context) : MusicSource {
         runCatching { db.listTracks().map { it.toTrack() } }
     }
 
-    /** La recherche standalone est le catalogue YouTube Music, pas MediaStore.
-     * La bibliothèque locale reste disponible dans son écran dédié et conserve
-     * sa lecture directe, mais ne masque jamais les résultats en ligne. */
+    /** Recherche unifiée : MediaStore et YouTube Music sont interrogés en
+     * parallèle. Chaque résultat garde sa provenance pour être lu par le bon
+     * chemin (content:// local ou URL InnerTube en ligne). */
     override suspend fun search(query: String): Result<List<Track>> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext Result.success(emptyList())
-        youtube.search(query)
+        coroutineScope {
+            val localDeferred = async { runCatching { db.searchTracks(query).map { it.toTrack() } } }
+            val onlineDeferred = async { youtube.search(query) }
+            val localResult = localDeferred.await()
+            val onlineResult = onlineDeferred.await()
+            val local = localResult.getOrDefault(emptyList())
+            val online = onlineResult.getOrDefault(emptyList())
+            when {
+                local.isEmpty() && online.isEmpty() && localResult.isFailure && onlineResult.isFailure ->
+                    Result.failure(onlineResult.exceptionOrNull() ?: localResult.exceptionOrNull()!!)
+                else -> Result.success((online + local).distinctBy { "${it.source}::${it.id}" })
+            }
+        }
     }
 
     override suspend fun resolvePlayableUri(track: Track): Result<String> {
