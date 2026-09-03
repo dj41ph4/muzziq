@@ -29,13 +29,13 @@ import java.security.SecureRandom
  * public de MuzziQ sans demande d'extension "Quota Extension" à Spotify.
  * Documenté ici plutôt que découvert en silence à l'usage.
  *
- * IMPORTANT — ce qui N'EST PAS fait dans ce fichier : capturer le retour du
- * navigateur/Custom Tab après authentification. `buildAuthorizationUri()`
- * produit l'URL à ouvrir, mais aucun intent-filter n'est déclaré dans
- * AndroidManifest.xml pour [REDIRECT_URI] et aucune Activity ne consomme ce
- * retour — ça reste un chantier de câblage UI séparé (écran Réglages), pas
- * fait ici pour rester dans le périmètre "provider seul, testable
- * indépendamment" demandé pour cette passe.
+ * Câblage du retour Custom Tab : intent-filter déclaré dans AndroidManifest.xml
+ * pour [REDIRECT_URI], capturé par MainActivity.onNewIntent()/onCreate() et
+ * transmis à AppViewModel.handleSpotifyCallback(). Point non vérifiable sans
+ * appareil réel (aucun émulateur/device disponible dans cet environnement) :
+ * le round-trip Custom Tab → deep link → onNewIntent — relu attentivement
+ * (scheme/host correspondent exactement à ceux du manifeste, state PKCE
+ * vérifié avant tout échange) mais jamais exécuté en conditions réelles.
  */
 class SpotifyAuthManager(
     private val credentialStore: SpotifyCredentialStore,

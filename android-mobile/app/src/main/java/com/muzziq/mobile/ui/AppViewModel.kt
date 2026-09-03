@@ -1,6 +1,7 @@
 package com.muzziq.mobile.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.muzziq.mobile.data.ApiClientFactory
@@ -17,6 +18,7 @@ import com.muzziq.mobile.core.capabilities.ServerConnectionState
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
 import com.muzziq.mobile.data.room.MuzziQDatabase
+import com.muzziq.mobile.data.room.LinkedMusicAccountEntity
 import com.muzziq.mobile.domain.DownloadRepository
 import com.muzziq.mobile.domain.InMemoryProviderRegistry
 import com.muzziq.mobile.domain.MusicProvider
@@ -35,10 +37,15 @@ import com.muzziq.mobile.domain.StandaloneHistoryAdapter
 import com.muzziq.mobile.playback.MusicSourceLocator
 import com.muzziq.mobile.playback.PlayerController
 import com.muzziq.mobile.playback.PlaylistRepositoryLocator
+import com.muzziq.mobile.providers.spotify.SpotifyAuthManager
+import com.muzziq.mobile.providers.spotify.SpotifyCredentialStore
+import com.muzziq.mobile.providers.spotify.SpotifyProvider
+import com.muzziq.mobile.security.AndroidKeystoreCredentialVault
 import com.muzziq.mobile.standalone.HistoryEntry
 import com.muzziq.mobile.standalone.MigrationManager
 import com.muzziq.mobile.standalone.StandaloneMusicSource
 import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
+import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -66,6 +73,16 @@ data class HomeRowUi(val id: String, val title: String, val tracks: List<Track>)
  * navigation (openArtist/openAlbum) reste identique dans les deux modes. */
 data class ArtistUi(val id: String, val name: String, val trackCount: Int, val albumCount: Int)
 data class AlbumUi(val id: String, val title: String, val artist: String, val trackCount: Int)
+
+/** État du compte Spotify pour l'écran Réglages (§67, priorité 5). NotConfigured
+ * distinct de Disconnected : capacité absente (aucun Client ID dans
+ * spotify.properties) ne doit jamais afficher un bouton "Connecter" qui
+ * échouerait en silence — voir SpotifyAuthManager.isConfigured(). */
+sealed interface SpotifyAccountUiState {
+    data object NotConfigured : SpotifyAccountUiState
+    data object Disconnected : SpotifyAccountUiState
+    data class Connected(val displayName: String?, val avatarUrl: String?) : SpotifyAccountUiState
+}
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Le paramètre de constructeur `application` (sans val) n'est capturé que dans les
@@ -344,8 +361,160 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Compte Spotify (§67, priorité 5) — coffre chiffré + Web API en lecture seule,
+     * voir providers/spotify/. Instanciation manuelle (même pattern que `standalone`/
+     * `favorites` ci-dessus, pas de graphe DI dans cette V1). */
+    private val spotifyCredentialStore by lazy { SpotifyCredentialStore(AndroidKeystoreCredentialVault(appContext)) }
+    private val spotifyAuthManager by lazy { SpotifyAuthManager(spotifyCredentialStore) }
+    private val spotifyProvider by lazy { SpotifyProvider(spotifyAuthManager) }
+    private val linkedAccountDao by lazy { MuzziQDatabase.get(appContext).linkedMusicAccountDao() }
+
+    private val _spotifyAccount = MutableStateFlow<SpotifyAccountUiState>(
+        if (spotifyAuthManager.isConfigured()) SpotifyAccountUiState.Disconnected else SpotifyAccountUiState.NotConfigured,
+    )
+    val spotifyAccount: StateFlow<SpotifyAccountUiState> = _spotifyAccount.asStateFlow()
+    private val _spotifyBusy = MutableStateFlow(false)
+    val spotifyBusy: StateFlow<Boolean> = _spotifyBusy.asStateFlow()
+    private val _spotifyError = MutableStateFlow<String?>(null)
+    val spotifyError: StateFlow<String?> = _spotifyError.asStateFlow()
+
+    /** `code_verifier`/`state` PKCE de la tentative en cours — vit en mémoire process
+     * (pas Room, pas DataStore : jamais un secret persistant, jamais utile après le
+     * round-trip Custom Tab). Si le process est tué pendant le trajet Custom Tab
+     * (mémoire système basse), la tentative est simplement perdue et l'utilisateur
+     * retape "Connecter" — pas de crash, pas de faux succès. Non vérifiable sans
+     * appareil réel (voir commentaire de tête de SpotifyAuthManager.kt). */
+    private data class PendingSpotifyAuth(val verifier: String, val state: String)
+    private var pendingSpotifyAuth: PendingSpotifyAuth? = null
+
+    /** URL Custom Tab à ouvrir — null si aucun Client ID configuré (SettingsScreen ne
+     * doit jamais appeler ceci sans vérifier `spotifyAccount != NotConfigured` avant). */
+    fun spotifyLoginUri(): Uri? {
+        if (!spotifyAuthManager.isConfigured()) return null
+        _spotifyError.value = null
+        val verifier = spotifyAuthManager.generateCodeVerifier()
+        val challenge = spotifyAuthManager.codeChallengeFor(verifier)
+        val state = UUID.randomUUID().toString()
+        pendingSpotifyAuth = PendingSpotifyAuth(verifier, state)
+        return spotifyAuthManager.buildAuthorizationUri(challenge, state)
+    }
+
+    /** Reçoit l'URI `muzziq://spotify-callback?...` capturée par MainActivity. Ignore
+     * silencieusement tout appel sans tentative en cours (pendingSpotifyAuth == null) —
+     * un deep link rejoué ou un intent parasite ne doit jamais déclencher d'échange. */
+    fun handleSpotifyCallback(uri: Uri) {
+        val pending = pendingSpotifyAuth ?: return
+        pendingSpotifyAuth = null
+
+        val authError = uri.getQueryParameter("error")
+        if (authError != null) {
+            _spotifyError.value = if (authError == "access_denied") {
+                "Connexion Spotify annulée."
+            } else {
+                "Spotify a refusé la connexion ($authError)."
+            }
+            return
+        }
+
+        val returnedState = uri.getQueryParameter("state")
+        if (returnedState != pending.state) {
+            _spotifyError.value = "Réponse Spotify invalide (state incohérent) — réessaie."
+            return
+        }
+
+        val code = uri.getQueryParameter("code")
+        if (code.isNullOrBlank()) {
+            _spotifyError.value = "Réponse Spotify incomplète (aucun code)."
+            return
+        }
+
+        viewModelScope.launch {
+            _spotifyBusy.value = true
+            _spotifyError.value = null
+
+            val exchange = spotifyAuthManager.exchangeCode(code, pending.verifier)
+            if (exchange.isFailure) {
+                _spotifyError.value = "Échange du jeton Spotify échoué : ${exchange.exceptionOrNull()?.message}"
+                _spotifyBusy.value = false
+                return@launch
+            }
+
+            val profile = spotifyProvider.profile()
+            val identity = profile.getOrNull()
+            if (identity == null) {
+                _spotifyError.value = "Connecté mais profil Spotify illisible : ${profile.exceptionOrNull()?.message}"
+                _spotifyBusy.value = false
+                return@launch
+            }
+
+            val existing = linkedAccountDao.byProvider("SPOTIFY")
+            linkedAccountDao.upsert(
+                LinkedMusicAccountEntity(
+                    id = existing?.id ?: "spotify:${identity.id}",
+                    provider = "SPOTIFY",
+                    externalUserId = identity.id,
+                    displayName = identity.displayName,
+                    avatarUrl = identity.avatarUrl,
+                    isPrimary = existing?.isPrimary ?: false,
+                    syncEnabled = true,
+                    connectedAt = existing?.connectedAt ?: System.currentTimeMillis(),
+                    lastSyncAt = System.currentTimeMillis(),
+                    status = "CONNECTED",
+                ),
+            )
+            registerSpotifyProvider()
+            _spotifyAccount.value = SpotifyAccountUiState.Connected(identity.displayName, identity.avatarUrl)
+            _spotifyBusy.value = false
+            refreshLibrary()
+        }
+    }
+
+    /** Déconnexion (règle absolue du plan) : efface les jetons + la ligne
+     * `linked_music_accounts`, jamais les favoris/playlists/historique/downloads —
+     * aucune de ces tables ne référence le compte Spotify. */
+    fun disconnectSpotify() {
+        viewModelScope.launch {
+            spotifyAuthManager.disconnect()
+            linkedAccountDao.byProvider("SPOTIFY")?.let { linkedAccountDao.delete(it.id) }
+            InMemoryProviderRegistry.unregister(MusicProviderId.SPOTIFY)
+            _spotifyAccount.value = SpotifyAccountUiState.Disconnected
+            _spotifyError.value = null
+            refreshLibrary()
+        }
+    }
+
+    private fun registerSpotifyProvider() {
+        InMemoryProviderRegistry.register(
+            MusicProvider(
+                id = MusicProviderId.SPOTIFY,
+                label = "Spotify",
+                catalogue = spotifyProvider,
+                library = spotifyProvider,
+                streamResolver = spotifyProvider,
+            ),
+        )
+    }
+
+    /** Restaure l'état Spotify au démarrage (compte déjà lié lors d'une session
+     * précédente) — LOCAL/SERVER restent en mode exclusif (activateStandalone/
+     * activateLinked), mais Spotify est cumulatif (§67) : ne dépend d'aucun des deux,
+     * s'enregistre indépendamment dans ProviderRegistry si un coffre valide existe. */
+    private suspend fun restoreSpotifyAccountState() {
+        if (!spotifyAuthManager.isConnected()) {
+            _spotifyAccount.value = SpotifyAccountUiState.Disconnected
+            return
+        }
+        val account = linkedAccountDao.byProvider("SPOTIFY")
+        _spotifyAccount.value = SpotifyAccountUiState.Connected(account?.displayName, account?.avatarUrl)
+        registerSpotifyProvider()
+        refreshLibrary()
+    }
+
     init {
         StandaloneMusicSourceHolder.instance = standalone
+        if (spotifyAuthManager.isConfigured()) {
+            viewModelScope.launch { restoreSpotifyAccountState() }
+        }
         player.connect()
         viewModelScope.launch {
             prefs.serverConnectionState.collect { updateConnectionState(it) }

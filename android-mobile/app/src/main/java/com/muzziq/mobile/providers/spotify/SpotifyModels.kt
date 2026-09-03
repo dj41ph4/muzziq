@@ -90,5 +90,11 @@ data class SpotifyPlaylistTracksResponse(
     val next: String? = null,
 )
 
+/** [images] : avatar du compte (documenté — "Get Current User's Profile"), plusieurs
+ * tailles possibles ou aucune (compte sans photo) — jamais fabriqué si absent. */
 @JsonClass(generateAdapter = true)
-data class SpotifyMeResponse(val id: String, @Json(name = "display_name") val displayName: String? = null)
+data class SpotifyMeResponse(
+    val id: String,
+    @Json(name = "display_name") val displayName: String? = null,
+    val images: List<SpotifyImage> = emptyList(),
+)

@@ -10,12 +10,11 @@ import com.muzziq.mobile.domain.StreamResolver
 
 /**
  * Provider Spotify (plan §67, priorité 5) — catalogue/bibliothèque/playlists en
- * LECTURE SEULE uniquement, via la Web API officielle Spotify. Pas encore
- * assemblé en `domain.MusicProvider`/enregistré dans `ProviderRegistry` ici :
- * ce chantier attend l'écran Réglages qui pilotera la connexion (bouton
- * "Connecter Spotify" → Custom Tab → callback), pas fait dans cette passe
- * (voir SpotifyAuthManager, commentaire de tête). Ce fichier est complet et
- * autonome, prêt à être branché une fois ce câblage écrit.
+ * LECTURE SEULE uniquement, via la Web API officielle Spotify. Assemblé en
+ * `domain.MusicProvider`/enregistré dans `ProviderRegistry` par AppViewModel
+ * (registerSpotifyProvider(), déclenché après un login réussi ou restauré au
+ * démarrage si un compte est déjà lié) — voir AppViewModel.handleSpotifyCallback
+ * pour le câblage écran Réglages → Custom Tab → callback → ce provider.
  *
  * [streamResolver] échoue TOUJOURS explicitement : la Web API Spotify ne
  * fournit à aucun tiers d'URL de flux audio jouable (contrairement à
@@ -25,6 +24,10 @@ import com.muzziq.mobile.domain.StreamResolver
  * SDK (contrôle à distance de l'app Spotify installée, pas un flux MuzziQ/
  * Media3) — hors périmètre de cette V1, pas commencé.
  */
+/** Identité minimale du compte Spotify lié — alimente `LinkedMusicAccountEntity`
+ * (externalUserId/displayName/avatarUrl) au moment de la connexion, jamais fabriquée. */
+data class SpotifyProfile(val id: String, val displayName: String?, val avatarUrl: String?)
+
 class SpotifyProvider(
     private val authManager: SpotifyAuthManager,
 ) : CatalogueProvider, LibraryRepository, StreamResolver, PlaylistRepository {
@@ -32,6 +35,23 @@ class SpotifyProvider(
     private suspend fun <T> withBearer(block: suspend (String) -> Result<T>): Result<T> {
         val token = authManager.validAccessToken().getOrElse { return Result.failure(it) }
         return block("Bearer $token")
+    }
+
+    /** Appelé une seule fois juste après l'échange de code réussi (voir AppViewModel.
+     * handleSpotifyCallback) : c'est le seul moyen d'obtenir l'identité réelle du compte
+     * lié (id/nom/avatar) à écrire dans LinkedMusicAccountEntity — jamais dérivée du
+     * seul access token. */
+    suspend fun profile(): Result<SpotifyProfile> = withBearer { bearer ->
+        runCatching {
+            val res = SpotifyApiClientFactory.web.me(bearer)
+            if (!res.isSuccessful) error("Profil Spotify indisponible (${res.code()})")
+            val body = res.body() ?: error("Réponse Spotify vide")
+            SpotifyProfile(
+                id = body.id,
+                displayName = body.displayName,
+                avatarUrl = body.images.maxByOrNull { (it.width ?: 0) * (it.height ?: 0) }?.url,
+            )
+        }
     }
 
     override suspend fun search(query: String): Result<List<Track>> = withBearer { bearer ->

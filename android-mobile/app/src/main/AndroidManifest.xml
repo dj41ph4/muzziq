@@ -41,6 +41,19 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Retour PKCE Spotify (SpotifyAuthManager.REDIRECT_URI = "muzziq://spotify-callback",
+                 réutilisé tel quel ici — ne jamais diverger de cette valeur, elle doit
+                 correspondre exactement à ce que chaque utilisateur déclare sur son
+                 dashboard developer.spotify.com). Schéma personnalisé, pas un App Link
+                 https : cohérent avec ce que fait Spotify lui-même pour les apps tierces
+                 PKCE mobiles (voir commentaire de tête de SpotifyAuthManager.kt). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="muzziq" android:host="spotify-callback" />
+            </intent-filter>
         </activity>
 
         <!-- Lecteur système : MediaSession + MediaLibraryService (Android Auto, §56.2). -->

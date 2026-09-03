@@ -135,6 +135,9 @@ dependencies {
     implementation(libs.palette.ktx)
 
     implementation(libs.datastore.preferences)
+    // Custom Tabs — onglet sécurisé pour l'écran de connexion Spotify (PKCE mobile),
+    // jamais une WebView maison (voir SpotifyAuthManager, commentaire de tête).
+    implementation(libs.androidx.browser)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
