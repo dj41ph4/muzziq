@@ -20,6 +20,8 @@ export interface MediaFile {
   album?: string;
   trackNumber?: number;
   durationSeconds?: number;
+  /** Code ISRC lu depuis les tags du fichier (TSRC/ID3, ISRC/Vorbis), quand présent — signal de matching quasi certain (plan §48/§104). */
+  isrc?: string;
   codec?: string;
   sampleRate?: number;
   bitsPerSample?: number;

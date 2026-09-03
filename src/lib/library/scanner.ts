@@ -61,6 +61,7 @@ export async function scanMusicDir(musicDir: string): Promise<ScanSummary> {
         artist: meta.common.artist ?? "Artiste inconnu",
         album: meta.common.album,
         trackNumber: meta.common.track?.no ?? undefined,
+        isrc: meta.common.isrc?.[0],
         durationSeconds: meta.format.duration,
         codec: meta.format.codec,
         sampleRate: meta.format.sampleRate,

@@ -15,6 +15,8 @@ export interface ExternalTrack {
   albumProviderId?: string;
   durationSeconds?: number;
   thumbnailUrl?: string;
+  /** Code ISRC (identifiant international d'enregistrement), quand le provider l'expose — signal de matching quasi certain (plan §48/§104). */
+  isrc?: string;
 }
 
 export interface ExternalArtist {
