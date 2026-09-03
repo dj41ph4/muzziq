@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { RefreshCw, Music2, X, Clock, HardDrive, ListMusic, Download, Sparkles, Settings } from "lucide-react";
 import type { MediaFile } from "@/lib/library/mediaFilesStore";
-import { usePlayer } from "@/components/PlayerContext";
+import { usePlayer, type PlayableTrack } from "@/components/PlayerContext";
 import { TopBar } from "@/components/TopBar";
 
 const SHORTCUTS = [
@@ -69,6 +69,40 @@ function TrackRow({
   );
 }
 
+function TrackCard({
+  title,
+  artist,
+  tech,
+  active,
+  onClick,
+}: {
+  title: string;
+  artist: string;
+  tech?: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <div onClick={onClick} className="group cursor-pointer">
+      <div className="art-fallback relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+        <Music2 size={26} className="text-white/20" />
+        <div className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--brand)] text-black shadow-[var(--shadow-card)]">
+            <Music2 size={16} />
+          </div>
+        </div>
+        {tech && (
+          <span className="absolute bottom-1.5 right-1.5 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white/70 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+            {tech}
+          </span>
+        )}
+      </div>
+      <div className={`mt-2 truncate text-[13px] font-semibold tracking-tight ${active ? "text-[var(--brand)]" : ""}`}>{title}</div>
+      <div className="truncate text-[12px] text-[var(--ink-soft)]">{artist}</div>
+    </div>
+  );
+}
+
 export default function LibraryPage() {
   const { data, mutate } = useSWR<{ files: MediaFile[] }>("/api/library", fetcher);
   const { data: libItems, mutate: mutateItems } = useSWR<{ items: LibraryItemView[] }>("/api/library/items", fetcher);
@@ -98,7 +132,15 @@ export default function LibraryPage() {
   }
 
   function playLocal(f: MediaFile) {
-    play({ kind: "local", id: f.id, title: f.title, artist: f.artist, album: f.album, durationSeconds: f.durationSeconds });
+    const queue: PlayableTrack[] = (data?.files ?? []).map((x) => ({
+      kind: "local",
+      id: x.id,
+      title: x.title,
+      artist: x.artist,
+      album: x.album,
+      durationSeconds: x.durationSeconds,
+    }));
+    play({ kind: "local", id: f.id, title: f.title, artist: f.artist, album: f.album, durationSeconds: f.durationSeconds }, queue);
   }
 
   async function removeItem(id: string) {
@@ -107,7 +149,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-9 px-5 pt-8 sm:px-8">
+    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-9 px-5 pt-8 sm:px-8">
       <div className="flex items-center justify-between">
         <TopBar title="Bibliothèque" />
         <button
@@ -142,25 +184,18 @@ export default function LibraryPage() {
           <HardDrive size={14} />
           <h2 className="text-[13px] font-bold uppercase tracking-wide">Fichiers locaux ({data?.files?.length ?? 0})</h2>
         </div>
-        <ul className="flex flex-col gap-0.5">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
           {data?.files?.map((f) => (
-            <TrackRow
+            <TrackCard
               key={f.id}
               title={f.title}
               artist={f.artist}
-              album={f.album}
+              tech={`${f.container}${f.bitsPerSample ? ` ${f.bitsPerSample}b` : ""}${f.sampleRate ? ` ${(f.sampleRate / 1000).toFixed(1)}k` : ""}`}
               active={nowPlaying?.kind === "local" && nowPlaying.id === f.id}
               onClick={() => playLocal(f)}
-              right={
-                <span className="hidden rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-bold uppercase text-[var(--ink-dim)] sm:inline">
-                  {f.container}
-                  {f.bitsPerSample ? ` ${f.bitsPerSample}b` : ""}
-                  {f.sampleRate ? ` ${(f.sampleRate / 1000).toFixed(1)}k` : ""}
-                </span>
-              }
             />
           ))}
-        </ul>
+        </div>
         {data && data.files.length === 0 && (
           <p className="glass rounded-xl px-4 py-6 text-center text-sm text-[var(--ink-dim)]">
             Aucun fichier. Configure un dossier musique puis lance un scan.
@@ -168,61 +203,63 @@ export default function LibraryPage() {
         )}
       </section>
 
-      <section className="float-in" style={{ animationDelay: "60ms" }}>
-        <div className="mb-3 flex items-center gap-2 text-[var(--ink-dim)]">
-          <Music2 size={14} />
-          <h2 className="text-[13px] font-bold uppercase tracking-wide">Ajoutés depuis la recherche ({libItems?.items?.length ?? 0})</h2>
-        </div>
-        <ul className="flex flex-col gap-0.5">
-          {libItems?.items?.map((item) => (
-            <TrackRow
-              key={item.id}
-              title={item.recording?.title ?? "?"}
-              artist={item.recording?.artist ?? ""}
-              right={
-                <div className="flex items-center gap-2">
-                  <span className="hidden rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-bold text-[var(--ink-dim)] sm:inline">
-                    {item.addPolicy}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeItem(item.id);
-                    }}
-                    className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--ink-dim)] transition-colors hover:bg-red-500/10 hover:text-red-400"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              }
-            />
-          ))}
-        </ul>
-        {libItems && libItems.items.length === 0 && (
-          <p className="glass rounded-xl px-4 py-6 text-center text-sm text-[var(--ink-dim)]">
-            Rien pour l&apos;instant — ajoute un morceau depuis la recherche.
-          </p>
-        )}
-      </section>
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-9">
+        <section className="float-in" style={{ animationDelay: "60ms" }}>
+          <div className="mb-3 flex items-center gap-2 text-[var(--ink-dim)]">
+            <Music2 size={14} />
+            <h2 className="text-[13px] font-bold uppercase tracking-wide">Ajoutés depuis la recherche ({libItems?.items?.length ?? 0})</h2>
+          </div>
+          <ul className="flex flex-col gap-0.5">
+            {libItems?.items?.map((item) => (
+              <TrackRow
+                key={item.id}
+                title={item.recording?.title ?? "?"}
+                artist={item.recording?.artist ?? ""}
+                right={
+                  <div className="flex items-center gap-2">
+                    <span className="hidden rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-bold text-[var(--ink-dim)] sm:inline">
+                      {item.addPolicy}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeItem(item.id);
+                      }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--ink-dim)] transition-colors hover:bg-red-500/10 hover:text-red-400"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                }
+              />
+            ))}
+          </ul>
+          {libItems && libItems.items.length === 0 && (
+            <p className="glass rounded-xl px-4 py-6 text-center text-sm text-[var(--ink-dim)]">
+              Rien pour l&apos;instant — ajoute un morceau depuis la recherche.
+            </p>
+          )}
+        </section>
 
-      <section className="float-in pb-4" style={{ animationDelay: "120ms" }}>
-        <div className="mb-3 flex items-center gap-2 text-[var(--ink-dim)]">
-          <Clock size={14} />
-          <h2 className="text-[13px] font-bold uppercase tracking-wide">Historique récent</h2>
-        </div>
-        <ul className="flex flex-col gap-1.5">
-          {history?.events?.slice(0, 10).map((e) => (
-            <li key={e.id} className="flex items-center justify-between px-2.5 text-[13px] text-[var(--ink-soft)]">
-              <span className="truncate">
-                {e.recording?.title} — {e.recording?.artist}
-              </span>
-              <span className="flex-shrink-0 font-mono text-[11px] text-[var(--ink-dim)]">
-                {new Date(e.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
+        <section className="float-in pb-4" style={{ animationDelay: "120ms" }}>
+          <div className="mb-3 flex items-center gap-2 text-[var(--ink-dim)]">
+            <Clock size={14} />
+            <h2 className="text-[13px] font-bold uppercase tracking-wide">Historique récent</h2>
+          </div>
+          <ul className="flex flex-col gap-1.5">
+            {history?.events?.slice(0, 10).map((e) => (
+              <li key={e.id} className="flex items-center justify-between px-2.5 text-[13px] text-[var(--ink-soft)]">
+                <span className="truncate">
+                  {e.recording?.title} — {e.recording?.artist}
+                </span>
+                <span className="flex-shrink-0 font-mono text-[11px] text-[var(--ink-dim)]">
+                  {new Date(e.at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
     </main>
   );
 }
