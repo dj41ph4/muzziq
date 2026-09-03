@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<!--
+  po_token.html — page hôte minimale pour PoTokenWebView.kt.
+
+  Chargée dans une WebView invisible avec `settings.blockNetworkLoads = true` :
+  cette page elle-même ne peut faire AUCUN appel réseau (fetch/XHR bloqués par
+  la WebView). Les deux seuls appels HTTP réels du flux (Create, GenerateIT)
+  sont faits côté Kotlin (OkHttp) et exposés ici via le pont
+  `@JavascriptInterface PoTokenHost` — voir PoTokenWebView.kt pour le détail
+  et les avertissements d'honnêteté (jamais testé sur appareil réel).
+
+  Cette page ne fait que : demander le challenge à Kotlin, injecter et
+  évaluer le script interpréteur BotGuard renvoyé par Google (récupéré par
+  Kotlin, jamais par cette page directement — network bloqué), puis relayer
+  la réponse du challenge à Kotlin pour l'appel GenerateIT. Aucun code
+  BotGuard n'est écrit ici : c'est le script de Google lui-même,
+  téléchargé à l'exécution, qui fournit la logique — cette page ne fait
+  qu'exécuter un vrai moteur JS/DOM pour lui, ce qu'un sandbox comme jsdom ne
+  sait pas faire de façon crédible (voir docs/reverse-engineering/youtube-music/
+  README.md, 2026-09-02).
+-->
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>MuzziQ PoToken host</title>
+</head>
+<body>
+<script>
+  // Toute exception non interceptée ici doit remonter à Kotlin plutôt que de
+  // laisser la page dans un état silencieusement mort (Kotlin ne pourrait
+  // alors plus jamais recevoir de réponse et resterait bloqué jusqu'au
+  // timeout défensif côté PoTokenWebView.kt).
+  window.onerror = function (message) {
+    try {
+      PoTokenHost.onError("window.onerror", String(message));
+    } catch (ignored) {
+      // Le pont JS lui-même a disparu (WebView en train de mourir) — rien à
+      // faire de plus ici, PoTokenWebView.kt détectera l'absence de réponse
+      // via son propre timeout.
+    }
+    return true;
+  };
+
+  /**
+   * Étape 1+2 : demande le challenge BotGuard à Kotlin (appel HTTP réel vers
+   * jnn/v1/Create, fait côté Kotlin car cette page n'a pas de réseau),
+   * télécharge (via Kotlin, même raison) puis évalue le script interpréteur
+   * qu'il désigne, et localise l'objet VM global qu'il expose.
+   *
+   * Forme exacte du challenge (noms de champs `interpreterJavascript`/
+   * `interpreterUrl`/`program`/`globalName`) : documentée publiquement par
+   * plusieurs projets tiers indépendants qui exposent ce même flux Google
+   * (licences permissives). Jamais interceptée en direct dans cette session
+   * (aucun appareil/réseau disponible ici) — voir l'avertissement en tête de
+   * PoTokenWebView.kt.
+   */
+  async function muzziqInit() {
+    var challengeRaw = PoTokenHost.fetchCreateChallenge();
+    var challenge = JSON.parse(challengeRaw);
+
+    var interpreterSource = challenge.interpreterJavascript;
+    if (!interpreterSource && challenge.interpreterUrl) {
+      interpreterSource = PoTokenHost.fetchInterpreterScript(challenge.interpreterUrl);
+    }
+    if (!interpreterSource) {
+      throw new Error("challenge Create sans interpreterJavascript ni interpreterUrl exploitable");
+    }
+
+    // eslint-disable-next-line no-eval -- script de Google lui-même, pas du
+    // code écrit dans ce dépôt ; c'est le mécanisme documenté (le VM
+    // BotGuard s'installe en évaluant ce script dans un contexte page réel).
+    (0, eval)(interpreterSource);
+
+    var globalName = challenge.globalName;
+    var vm = globalName ? window[globalName] : undefined;
+    if (!vm) {
+      throw new Error(
+        "objet VM BotGuard introuvable après eval (globalName='" + globalName + "') — " +
+        "signe probable que Google a changé la convention d'exposition depuis l'écriture " +
+        "de ce fichier ; jamais vérifié en direct dans cet environnement (voir en-tête de " +
+        "PoTokenWebView.kt)."
+      );
+    }
+
+    // Étape 3 : fait "résoudre" le challenge par le VM pour produire la
+    // réponse BotGuard (attestation) attendue par GenerateIT.
+    //
+    // Convention structurelle observée (étude de comportement publique,
+    // recoupée sur plusieurs implémentations tierces indépendantes sous
+    // licence permissive qui exposent ce même flux Google — pas Metrolist,
+    // pas copiée) : `window[globalName]` est un OBJET (pas une fonction ni
+    // un constructeur) exposant une méthode asynchrone, appelée ici avec le
+    // nom générique `invoke`, qui prend le `program` du challenge et une
+    // fonction de rappel ; ce rappel reçoit plusieurs fonctions internes,
+    // dont l'une (position non confirmée en direct dans cet environnement —
+    // aucun appareil disponible ici, voir en-tête de PoTokenWebView.kt) sert
+    // ensuite, appelée avec un identifiant de signal de sortie, à produire la
+    // chaîne finale envoyée à GenerateIT. Le nom réel de cette méthode sur le
+    // VM (une seule lettre dans les builds observés publiquement, purement
+    // issue de la minification du script de Google — pas un identifiant
+    // significatif ni une expression créative) n'est délibérément pas fixé en
+    // dur ici : [findVmEntryPoint] le détecte structurellement (la seule
+    // fonction membre à un seul caractère exposée directement sur l'objet)
+    // pour rester robuste à un renommage de minification d'un build à
+    // l'autre, plutôt que de coder en dur une lettre précise qui casserait
+    // au prochain déploiement du player Google.
+    var entryPointName = findVmEntryPoint(vm);
+    if (!entryPointName) {
+      throw new Error(
+        "aucune méthode d'entrée exploitable trouvée sur l'objet VM BotGuard " +
+        "(attendu : une méthode membre directe à un seul caractère) — forme " +
+        "non reconnue, jamais confirmée en direct dans cet environnement."
+      );
+    }
+
+    var botguardResponse = await muzziqSolve(vm, entryPointName, challenge.program);
+
+    // Étape 4 : relaie la réponse à Kotlin, qui fait l'appel HTTP réel vers
+    // jnn/v1/GenerateIT et renvoie l'intégrité obtenue (jeton + expiration).
+    var integrityRaw = PoTokenHost.submitBotguardResponse(botguardResponse);
+    PoTokenHost.onIntegrityToken(integrityRaw);
+  }
+
+  /** Cherche, sur l'objet VM, une méthode membre directe dont le nom fait un
+   * seul caractère — signature structurelle du point d'entrée dans les
+   * builds observés publiquement (nom réel toujours issu de la minification,
+   * jamais stable d'un déploiement à l'autre). Retourne `null` si aucune ne
+   * correspond plutôt que de deviner au hasard. */
+  function findVmEntryPoint(vm) {
+    if (!vm || typeof vm !== "object") return null;
+    for (var key in vm) {
+      if (key.length === 1 && typeof vm[key] === "function") {
+        return key;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Point le plus incertain de tout ce fichier, documenté honnêtement : la
+   * signature exacte du rappel passé au point d'entrée du VM (combien de
+   * fonctions il reçoit, laquelle sert de "snapshot" synchrone une fois le
+   * VM chargé, quels arguments cette dernière attend au juste — un tableau
+   * de signaux de sortie souhaités a minima) n'a jamais pu être capturée en
+   * direct dans cet environnement (aucun appareil disponible ici). Ce bloc
+   * capture toutes les fonctions reçues par le rappel et retient la première
+   * qui, appelée avec un tableau de signaux vide, renvoie une chaîne (valeur
+   * directement ou via une Promise) — hypothèse raisonnable mais **non
+   * vérifiée**, à confirmer par une vraie capture réseau sur appareil avant
+   * toute activation en production (voir en-tête de PoTokenWebView.kt).
+   */
+  function muzziqSolve(vm, entryPointName, program) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      try {
+        var maybePromise = vm[entryPointName](program, function () {
+          if (settled) return;
+          var callbackFns = Array.prototype.slice.call(arguments).filter(function (a) {
+            return typeof a === "function";
+          });
+          if (callbackFns.length === 0) {
+            settled = true;
+            reject(new Error("rappel du VM BotGuard sans aucune fonction en argument — forme inattendue"));
+            return;
+          }
+          Promise.all(callbackFns.map(function (fn) {
+            return Promise.resolve()
+              .then(function () { return fn([]); })
+              .catch(function () { return undefined; });
+          })).then(function (results) {
+            if (settled) return;
+            var stringResult = results.find(function (r) { return typeof r === "string" && r.length > 0; });
+            settled = true;
+            if (stringResult) {
+              resolve(stringResult);
+            } else {
+              reject(new Error("aucune des fonctions de rappel du VM BotGuard n'a renvoyé de chaîne exploitable"));
+            }
+          });
+        }, true);
+        // Si le point d'entrée renvoie lui-même une Promise (plutôt que
+        // d'appeler le rappel de façon asynchrone), on la laisse suivre son
+        // cours sans bloquer — le rappel ci-dessus reste la voie principale.
+        if (maybePromise && typeof maybePromise.catch === "function") {
+          maybePromise.catch(function (err) {
+            if (!settled) {
+              settled = true;
+              reject(err);
+            }
+          });
+        }
+      } catch (err) {
+        if (!settled) {
+          settled = true;
+          reject(err);
+        }
+      }
+    });
+  }
+
+  muzziqInit().catch(function (err) {
+    PoTokenHost.onError("init", String((err && err.message) || err));
+  });
+</script>
+</body>
+</html>
