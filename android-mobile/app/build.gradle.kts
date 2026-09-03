@@ -2,7 +2,6 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
@@ -74,9 +73,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // Pas de bloc kotlinOptions : avec le Kotlin integre d'AGP 9, jvmTarget
+    // suit automatiquement compileOptions.targetCompatibility (17 ci-dessus).
 
     buildFeatures {
         compose = true
