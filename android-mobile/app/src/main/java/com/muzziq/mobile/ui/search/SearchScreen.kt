@@ -56,7 +56,7 @@ fun SearchScreen(
                 onValueChange = onQueryChange,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 singleLine = true,
-                placeholder = { Text(if (mode == AppMode.STANDALONE) "Rechercher dans ta musique locale" else "Rechercher un titre, artiste, album", color = MuzziQColors.TextFaint) },
+                placeholder = { Text(if (mode == AppMode.STANDALONE) "Rechercher sur YouTube Music" else "Rechercher un titre, artiste, album", color = MuzziQColors.TextFaint) },
             )
             if (mode == AppMode.STANDALONE) {
                 Text(

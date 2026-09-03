@@ -33,11 +33,12 @@ class StandaloneMusicSource(context: Context) : MusicSource {
         runCatching { db.listTracks().map { it.toTrack() } }
     }
 
+    /** La recherche standalone est le catalogue YouTube Music, pas MediaStore.
+     * La bibliothèque locale reste disponible dans son écran dédié et conserve
+     * sa lecture directe, mais ne masque jamais les résultats en ligne. */
     override suspend fun search(query: String): Result<List<Track>> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext Result.success(emptyList())
-        val local = runCatching { db.searchTracks(query).map { it.toTrack() } }.getOrDefault(emptyList())
-        val online = youtube.search(query).getOrDefault(emptyList())
-        Result.success(local + online)
+        youtube.search(query)
     }
 
     override suspend fun resolvePlayableUri(track: Track): Result<String> {

@@ -52,7 +52,6 @@ okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-i
 moshi-kotlin = { group = "com.squareup.moshi", name = "moshi-kotlin", version.ref = "moshi" }
 ktor-client-core = { group = "io.ktor", name = "ktor-client-core", version.ref = "ktor" }
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
-innertubex = { group = "com.github.MetrolistGroup.innertubex", name = "innertubex", version = "0.4.1" }
 
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
 palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
@@ -74,10 +73,8 @@ guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
 # (built-in Kotlin) et refuse qu'on applique le plugin Kotlin Android en plus
 # ("Cannot add extension with name 'kotlin'").
 android-application = { id = "com.android.application", version.ref = "agp" }
-# Declare — sans l'appliquer, cf. build.gradle.kts racine — la version de KGP
-# que le Kotlin integre d'AGP doit utiliser : AGP 9.4 embarque encore KGP
-# 2.2.10, incapable de lire les metadonnees Kotlin 2.4 d'innertubex-android
-# 0.4.1 (qui depend de kotlin-stdlib 2.4.10).
+# Déclare — sans l'appliquer, cf. build.gradle.kts racine — la version de KGP
+# utilisée par la chaîne Kotlin intégrée d'AGP.
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 # KSP 2.3.x (KSP2) : premiere serie compatible AGP 9 + built-in Kotlin, et

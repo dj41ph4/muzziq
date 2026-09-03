@@ -130,7 +130,6 @@ dependencies {
     implementation(libs.moshi.kotlin)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
-    implementation(libs.innertubex)
 
     implementation(libs.coil.compose)
     implementation(libs.palette.ktx)
