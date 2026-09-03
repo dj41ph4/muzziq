@@ -28,7 +28,7 @@ val spotifyClientId = run {
 
 android {
     namespace = "com.muzziq.mobile"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.muzziq.mobile"

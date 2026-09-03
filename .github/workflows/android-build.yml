@@ -50,8 +50,14 @@ jobs:
       - name: Configuration du SDK Android
         uses: android-actions/setup-android@v3
 
+      - name: Diagnostic SDK Android (platforms deja presents)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/platforms" || true
+          sdkmanager --list 2>/dev/null | grep -i "platforms;android-3[5-9]" || true
+
       - name: Installation de la plateforme et des build-tools
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        run: sdkmanager "platforms;android-37" "build-tools;35.0.0"
 
       - name: Configuration de Gradle
         uses: gradle/actions/setup-gradle@v4
