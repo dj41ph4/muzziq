@@ -9,8 +9,13 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import com.muzziq.mobile.data.MusicSource
 import com.muzziq.mobile.data.model.Track
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 /**
  * Pont Compose ↔ MediaController (§39 : le player est une fonction de premier
@@ -20,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 class PlayerController(context: Context) {
     private val appContext = context.applicationContext
     private var controller: MediaController? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
@@ -32,6 +38,16 @@ class PlayerController(context: Context) {
 
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs
+
+    /** File d'attente réelle (§40, onglet Queue du plein écran) — miroir de
+     * `PlaybackService.queueFlow`/`queueIndexFlow`, jamais recalculée séparément ici. Vide
+     * tant qu'aucune lecture en file n'a démarré ([play] isolé) ou pendant un
+     * [restoreDisplay] non encore repris (voir [pendingRestore]). */
+    private val _queue = MutableStateFlow<List<Track>>(emptyList())
+    val queue: StateFlow<List<Track>> = _queue
+
+    private val _queueIndex = MutableStateFlow(-1)
+    val queueIndex: StateFlow<Int> = _queueIndex
 
     /** Non nul entre [restoreDisplay] et la reprise effective — le morceau affiché
      * (mini-player) n'a pas encore été rechargé dans le vrai player média (plan §57 :
@@ -57,9 +73,22 @@ class PlayerController(context: Context) {
                     // (skipNext/skipPrevious) et l'avance automatique en fin de morceau
                     // (STATE_ENDED côté PlaybackService), les deux chemins passant par
                     // resolveAndPlay() côté service.
-                    _currentTrack.value = PlaybackServiceBridge.instanceOrNull()?.currentTrackOrNull()
+                    val service = PlaybackServiceBridge.instanceOrNull()
+                    _currentTrack.value = service?.currentTrackOrNull()
+                    if (service != null) {
+                        _queue.value = service.queueFlow.value
+                        _queueIndex.value = service.queueIndexFlow.value
+                    }
                 }
             })
+            // Le service tourne dans le même process (PlaybackServiceBridge, pas d'IPC réel)
+            // et son onCreate() a déjà roulé au moment où le MediaController se connecte —
+            // sûr de collecter ses flows de file d'attente dès ici plutôt que d'attendre un
+            // premier changement de morceau.
+            PlaybackServiceBridge.instanceOrNull()?.let { service ->
+                scope.launch { service.queueFlow.collect { _queue.value = it } }
+                scope.launch { service.queueIndexFlow.collect { _queueIndex.value = it } }
+            }
             onReady()
         }, MoreExecutors.directExecutor())
     }
@@ -94,7 +123,18 @@ class PlayerController(context: Context) {
         _currentTrack.value = track
         _positionMs.value = positionMs
         _durationMs.value = ((track.durationSeconds ?: 0.0) * 1000).toLong()
+        _queue.value = tracks
+        _queueIndex.value = index
         pendingRestore = tracks to index
+    }
+
+    /** Saut direct à un morceau de la file depuis l'onglet Queue (plein écran). No-op tant
+     * qu'une file restaurée ([restoreDisplay]) n'a pas encore été reprise dans le vrai
+     * player (pendingRestore) — togglePlayPause() doit d'abord relancer la lecture réelle,
+     * jamais un saut silencieux sur un état affiché mais pas encore chargé. */
+    fun jumpToQueueIndex(index: Int) {
+        if (pendingRestore != null) return
+        PlaybackServiceBridge.instanceOrNull()?.jumpToQueueIndex(index)
     }
 
     fun skipNext() {
@@ -131,5 +171,6 @@ class PlayerController(context: Context) {
     fun release() {
         controller?.release()
         controller = null
+        scope.cancel()
     }
 }

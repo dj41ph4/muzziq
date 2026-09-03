@@ -27,6 +27,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.guava.future
 import kotlinx.coroutines.launch
 
@@ -49,8 +52,20 @@ class PlaybackService : MediaLibraryService() {
     // potentiellement un appel réseau côté serveur) qu'au moment où il devient courant,
     // jamais toute la file à l'avance. Limite assumée : pas de gapless entre morceaux
     // (un vrai preload du morceau suivant est un chantier séparé).
-    private var queue: List<Track> = emptyList()
-    private var queueIndex: Int = -1
+    private val _queue = MutableStateFlow<List<Track>>(emptyList())
+    /** File d'attente observable (onglet Queue, plein écran) — miroir du champ [queue]
+     * ci-dessous, mêmes écritures, jamais une deuxième source de vérité. */
+    val queueFlow: StateFlow<List<Track>> = _queue.asStateFlow()
+    private var queue: List<Track>
+        get() = _queue.value
+        set(value) { _queue.value = value }
+
+    private val _queueIndex = MutableStateFlow(-1)
+    val queueIndexFlow: StateFlow<Int> = _queueIndex.asStateFlow()
+    private var queueIndex: Int
+        get() = _queueIndex.value
+        set(value) { _queueIndex.value = value }
+
     private var queueSource: MusicSource? = null
     private val queueStateStore by lazy { QueueStateStore(this) }
 
@@ -139,6 +154,16 @@ class PlaybackService : MediaLibraryService() {
         val source = queueSource ?: return
         if (queue.isEmpty() || queueIndex <= 0) return
         queueIndex -= 1
+        scope.launch { resolveAndPlay(queue[queueIndex], source) }
+    }
+
+    /** Saut direct à un morceau de la file (onglet Queue, plein écran) — même chemin de
+     * résolution que [skipNext]/[skipPrevious] (resolveAndPlay), jamais une lecture ad hoc
+     * indépendante du reste de la file. */
+    fun jumpToQueueIndex(index: Int) {
+        val source = queueSource ?: return
+        if (index !in queue.indices || index == queueIndex) return
+        queueIndex = index
         scope.launch { resolveAndPlay(queue[queueIndex], source) }
     }
 
