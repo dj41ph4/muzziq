@@ -42,15 +42,21 @@ interface LibraryRepository {
     suspend fun library(): Result<List<Track>>
 }
 
-data class PlaylistSummary(val id: String, val name: String, val itemCount: Int)
+/** [provider] : source réelle de la playlist (§58 — jamais fusionner deux playlists de
+ * même nom entre providers, elles restent distinctes, l'UI affiche un badge de
+ * provenance pour SPOTIFY). Room (standalone) et le serveur restent en mode exclusif
+ * l'un par rapport à l'autre (LOCAL ou SERVER, jamais les deux) ; SPOTIFY, lui,
+ * s'ajoute en plus (§67, cumulatif) — voir AppViewModel.refreshPlaylists(). */
+data class PlaylistSummary(val id: String, val name: String, val itemCount: Int, val provider: MusicProviderId)
 
 /**
- * Playlists (plan §6/§66) — standalone (Room, RoomPlaylistRepository) et mode Lié
- * (serveur, ServerPlaylistRepository) sont deux implémentations réelles et complètes,
- * pas juste un contrat posé sans classe (contrairement à Lyrics/Recommendation
- * ci-dessous). Contrat volontairement plus riche qu'un simple `List<String>` de noms —
- * la version précédente ne permettait ni de lister le contenu d'une playlist, ni d'y
- * ajouter/retirer un morceau, donc rien d'utile à construire dessus.
+ * Playlists (plan §6/§66) — standalone (Room, RoomPlaylistRepository), mode Lié
+ * (serveur, ServerPlaylistRepository) et Spotify (SpotifyProvider, lecture seule)
+ * sont des implémentations réelles et complètes, pas juste un contrat posé sans
+ * classe (contrairement à Lyrics/Recommendation ci-dessous). Contrat volontairement
+ * plus riche qu'un simple `List<String>` de noms — la version précédente ne
+ * permettait ni de lister le contenu d'une playlist, ni d'y ajouter/retirer un
+ * morceau, donc rien d'utile à construire dessus.
  */
 interface PlaylistRepository {
     suspend fun playlists(): Result<List<PlaylistSummary>>

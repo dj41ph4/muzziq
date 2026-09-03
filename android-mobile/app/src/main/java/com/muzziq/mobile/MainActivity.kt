@@ -54,6 +54,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.muzziq.mobile.BuildConfig
 import com.muzziq.mobile.data.AppMode
+import com.muzziq.mobile.domain.MusicProviderId
 import com.muzziq.mobile.ui.AppViewModel
 import com.muzziq.mobile.ui.RootUiState
 import com.muzziq.mobile.ui.history.HistoryScreen
@@ -310,15 +311,20 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
 
                 if (showPlaylistPicker) {
                     val track = currentTrack
+                    // Spotify (lecture seule, §58) : jamais proposée ici, ajouter un
+                    // morceau échouerait toujours explicitement côté SpotifyProvider —
+                    // filtrée en amont plutôt que de laisser l'utilisateur taper dans le
+                    // vide sur une option qui ne peut jamais réussir.
+                    val addablePlaylists = playlists.filter { it.provider != MusicProviderId.SPOTIFY }
                     AlertDialog(
                         onDismissRequest = { showPlaylistPicker = false },
                         title = { Text("Ajouter à une playlist", color = MuzziQColors.TextPrimary) },
                         text = {
-                            if (playlists.isEmpty()) {
+                            if (addablePlaylists.isEmpty()) {
                                 Text("Aucune playlist — crée-en une depuis l'onglet Playlists.", color = MuzziQColors.TextMuted)
                             } else {
                                 Column {
-                                    playlists.forEach { playlist ->
+                                    addablePlaylists.forEach { playlist ->
                                         Text(
                                             playlist.name,
                                             color = MuzziQColors.TextPrimary,

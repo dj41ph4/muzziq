@@ -282,9 +282,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Playlists (plan §6/§66) — RoomPlaylistRepository en standalone, ServerPlaylistRepository
-     * en mode Lié, choisi/instancié dans activateStandalone/activateLinked comme les
-     * téléchargements. */
+    /** Playlists (plan §6/§66/§67) — RoomPlaylistRepository en standalone,
+     * ServerPlaylistRepository en mode Lié, choisi/instancié dans activateStandalone/
+     * activateLinked comme les téléchargements ([playlistRepository], exclusif LOCAL/
+     * SERVER, seul backend capable de créer/modifier). Spotify (spotifyProvider,
+     * lecture seule) s'ajoute par-dessus quand un compte est connecté — cumulatif
+     * (§67), jamais fusionné avec une playlist de même nom (§58, voir
+     * PlaylistSummary.provider). [playlistRepositoryFor] route chaque action vers le
+     * bon backend selon la provenance réelle de la playlist ciblée. */
     private var playlistRepository: PlaylistRepository? = null
     private val _playlists = MutableStateFlow<List<PlaylistSummary>>(emptyList())
     val playlists: StateFlow<List<PlaylistSummary>> = _playlists.asStateFlow()
@@ -293,14 +298,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _openPlaylistId = MutableStateFlow<String?>(null)
     val openPlaylistId: StateFlow<String?> = _openPlaylistId.asStateFlow()
 
+    /** Backend réel pour une playlist déjà listée dans `_playlists` — Spotify si son
+     * provider est SPOTIFY, le repo primaire (Room/serveur) sinon. Un id inconnu de
+     * `_playlists` (jamais rafraîchi, ou déjà supprimé) retombe sur le repo primaire :
+     * comportement identique à avant cette agrégation plutôt qu'un échec silencieux. */
+    private fun playlistRepositoryFor(playlistId: String): PlaylistRepository? {
+        val provider = _playlists.value.firstOrNull { it.id == playlistId }?.provider
+        return if (provider == MusicProviderId.SPOTIFY) spotifyProvider else playlistRepository
+    }
+
     fun refreshPlaylists() {
         val repo = playlistRepository ?: return
         viewModelScope.launch {
-            repo.playlists().onSuccess { _playlists.value = it }.onFailure { _error.value = it.message }
+            repo.playlists()
+                .onSuccess { primary ->
+                    val spotify = if (_spotifyAccount.value is SpotifyAccountUiState.Connected) {
+                        spotifyProvider.playlists().getOrDefault(emptyList())
+                    } else {
+                        emptyList()
+                    }
+                    _playlists.value = primary + spotify
+                }
+                .onFailure { _error.value = it.message }
         }
     }
 
     fun createPlaylist(name: String) {
+        // Spotify ne peut jamais créer (lecture seule) — toujours le repo primaire.
         val repo = playlistRepository ?: return
         if (name.isBlank()) return
         viewModelScope.launch {
@@ -311,7 +335,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deletePlaylist(playlistId: String) {
-        val repo = playlistRepository ?: return
+        val repo = playlistRepositoryFor(playlistId) ?: return
         viewModelScope.launch {
             repo.deletePlaylist(playlistId)
                 .onSuccess {
@@ -323,7 +347,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openPlaylist(playlistId: String) {
-        val repo = playlistRepository ?: return
+        val repo = playlistRepositoryFor(playlistId) ?: return
         _openPlaylistId.value = playlistId
         viewModelScope.launch {
             repo.playlistTracks(playlistId)
@@ -338,7 +362,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addToPlaylist(playlistId: String, track: Track) {
-        val repo = playlistRepository ?: return
+        val repo = playlistRepositoryFor(playlistId) ?: return
         viewModelScope.launch {
             repo.addTrackToPlaylist(playlistId, track)
                 .onSuccess {
@@ -350,7 +374,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeFromPlaylist(playlistId: String, trackId: String) {
-        val repo = playlistRepository ?: return
+        val repo = playlistRepositoryFor(playlistId) ?: return
         viewModelScope.launch {
             repo.removeTrackFromPlaylist(playlistId, trackId)
                 .onSuccess {
@@ -466,12 +490,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _spotifyAccount.value = SpotifyAccountUiState.Connected(identity.displayName, identity.avatarUrl)
             _spotifyBusy.value = false
             refreshLibrary()
+            refreshPlaylists()
         }
     }
 
     /** Déconnexion (règle absolue du plan) : efface les jetons + la ligne
      * `linked_music_accounts`, jamais les favoris/playlists/historique/downloads —
-     * aucune de ces tables ne référence le compte Spotify. */
+     * aucune de ces tables ne référence le compte Spotify. Les playlists Spotify
+     * disparaissent de `_playlists` au prochain refreshPlaylists() (leur backend
+     * n'existe plus) — jamais une suppression de données MuzziQ. */
     fun disconnectSpotify() {
         viewModelScope.launch {
             spotifyAuthManager.disconnect()
@@ -479,7 +506,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             InMemoryProviderRegistry.unregister(MusicProviderId.SPOTIFY)
             _spotifyAccount.value = SpotifyAccountUiState.Disconnected
             _spotifyError.value = null
+            if (_openPlaylistId.value != null && _playlists.value.firstOrNull { it.id == _openPlaylistId.value }?.provider == MusicProviderId.SPOTIFY) {
+                closePlaylist()
+            }
             refreshLibrary()
+            refreshPlaylists()
         }
     }
 
@@ -508,6 +539,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _spotifyAccount.value = SpotifyAccountUiState.Connected(account?.displayName, account?.avatarUrl)
         registerSpotifyProvider()
         refreshLibrary()
+        refreshPlaylists()
     }
 
     init {

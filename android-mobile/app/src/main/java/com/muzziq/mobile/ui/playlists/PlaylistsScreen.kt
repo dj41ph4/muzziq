@@ -38,14 +38,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.muzziq.mobile.data.model.Track
+import com.muzziq.mobile.domain.MusicProviderId
 import com.muzziq.mobile.domain.PlaylistSummary
 import com.muzziq.mobile.ui.common.TrackRow
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
 /**
- * Playlists (plan §6/§66) — liste + détail, fonctionnent identiquement en
- * standalone (RoomPlaylistRepository) et en mode Lié (ServerPlaylistRepository) :
- * même écran, même comportement, seule l'implémentation change côté AppViewModel.
+ * Playlists (plan §6/§66/§67/§58) — liste + détail, fonctionnent identiquement en
+ * standalone (RoomPlaylistRepository) et en mode Lié (ServerPlaylistRepository), avec
+ * les playlists Spotify agrégées par-dessus quand un compte est connecté
+ * (AppViewModel.refreshPlaylists()) — jamais fusionnées avec une playlist Room/serveur
+ * de même nom (§58), toujours distinguées par un badge "Spotify" et jamais
+ * modifiables depuis cet écran (lecture seule, boutons Supprimer/Retirer masqués).
  */
 @Composable
 fun PlaylistsScreen(
@@ -73,13 +77,17 @@ fun PlaylistsScreen(
                     IconButton(onClick = onClosePlaylist) {
                         Icon(Icons.Rounded.ArrowBack, contentDescription = "Retour", tint = MuzziQColors.TextPrimary)
                     }
-                    Text(
-                        playlist?.name ?: "Playlist",
-                        color = MuzziQColors.TextPrimary,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 8.dp).weight(1f),
-                    )
+                    Column(Modifier.padding(start = 8.dp).weight(1f)) {
+                        Text(
+                            playlist?.name ?: "Playlist",
+                            color = MuzziQColors.TextPrimary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (playlist?.provider == MusicProviderId.SPOTIFY) {
+                            SourceBadge(text = "Spotify")
+                        }
+                    }
                 }
                 if (playlistTracks.isEmpty()) {
                     Text(
@@ -89,12 +97,17 @@ fun PlaylistsScreen(
                         modifier = Modifier.padding(16.dp),
                     )
                 }
+                // Spotify (lecture seule) : jamais de bouton "Retirer" — aucune route
+                // d'écriture n'existe côté SpotifyProvider pour cette playlist (§58).
+                val removable = playlist?.provider != MusicProviderId.SPOTIFY
                 LazyColumn {
                     items(playlistTracks, key = { it.id }) { track ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.weight(1f)) { TrackRow(track) { onTrackClick(track) } }
-                            IconButton(onClick = { onRemoveTrack(openPlaylistId, track.id) }) {
-                                Icon(Icons.Rounded.Delete, contentDescription = "Retirer", tint = MuzziQColors.TextFaint)
+                            if (removable) {
+                                IconButton(onClick = { onRemoveTrack(openPlaylistId, track.id) }) {
+                                    Icon(Icons.Rounded.Delete, contentDescription = "Retirer", tint = MuzziQColors.TextFaint)
+                                }
                             }
                         }
                     }
@@ -139,11 +152,20 @@ fun PlaylistsScreen(
                             Icon(Icons.Rounded.QueueMusic, contentDescription = null, tint = MuzziQColors.TextMuted)
                         }
                         Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                            Text(playlist.name, color = MuzziQColors.TextPrimary, fontSize = 15.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(playlist.name, color = MuzziQColors.TextPrimary, fontSize = 15.sp)
+                                if (playlist.provider == MusicProviderId.SPOTIFY) {
+                                    SourceBadge(text = "Spotify", modifier = Modifier.padding(start = 8.dp))
+                                }
+                            }
                             Text("${playlist.itemCount} morceau(x)", color = MuzziQColors.TextMuted, fontSize = 12.sp)
                         }
-                        IconButton(onClick = { onDeletePlaylist(playlist.id) }) {
-                            Icon(Icons.Rounded.Delete, contentDescription = "Supprimer", tint = MuzziQColors.TextFaint)
+                        // Spotify (lecture seule) : jamais de bouton "Supprimer" — la
+                        // playlist n'existe pas dans Room/le serveur (§58).
+                        if (playlist.provider != MusicProviderId.SPOTIFY) {
+                            IconButton(onClick = { onDeletePlaylist(playlist.id) }) {
+                                Icon(Icons.Rounded.Delete, contentDescription = "Supprimer", tint = MuzziQColors.TextFaint)
+                            }
                         }
                     }
                 }
@@ -174,5 +196,19 @@ fun PlaylistsScreen(
                 containerColor = MuzziQColors.Surface,
             )
         }
+    }
+}
+
+/** Badge de provenance (§58) — jamais un simple renommage "(Spotify)" dans le titre,
+ * un élément visuel séparé pour que la distinction reste évidente même si deux
+ * playlists (une locale/serveur, une Spotify) partagent le même nom. */
+@Composable
+private fun SourceBadge(text: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .background(MuzziQColors.Surface, RoundedCornerShape(6.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+    ) {
+        Text(text, color = MuzziQColors.TextMuted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
     }
 }

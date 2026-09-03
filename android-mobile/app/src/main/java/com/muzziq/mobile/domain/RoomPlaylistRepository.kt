@@ -19,13 +19,13 @@ class RoomPlaylistRepository(context: Context) : PlaylistRepository {
     private val dao = MuzziQDatabase.get(context).playlistDao()
 
     override suspend fun playlists(): Result<List<PlaylistSummary>> = runCatching {
-        dao.getAllOnce().map { PlaylistSummary(it.id, it.name, dao.itemCount(it.id)) }
+        dao.getAllOnce().map { PlaylistSummary(it.id, it.name, dao.itemCount(it.id), MusicProviderId.LOCAL) }
     }
 
     override suspend fun createPlaylist(name: String): Result<PlaylistSummary> = runCatching {
         val playlist = PlaylistEntity(id = UUID.randomUUID().toString(), name = name, createdAt = System.currentTimeMillis())
         dao.upsert(playlist)
-        PlaylistSummary(playlist.id, playlist.name, 0)
+        PlaylistSummary(playlist.id, playlist.name, 0, MusicProviderId.LOCAL)
     }
 
     override suspend fun deletePlaylist(playlistId: String): Result<Unit> = runCatching {

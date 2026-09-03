@@ -4,6 +4,7 @@ import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
 import com.muzziq.mobile.domain.CatalogueProvider
 import com.muzziq.mobile.domain.LibraryRepository
+import com.muzziq.mobile.domain.MusicProviderId
 import com.muzziq.mobile.domain.PlaylistRepository
 import com.muzziq.mobile.domain.PlaylistSummary
 import com.muzziq.mobile.domain.StreamResolver
@@ -23,6 +24,13 @@ import com.muzziq.mobile.domain.StreamResolver
  * Écouter un morceau Spotify réellement nécessiterait le Spotify App Remote
  * SDK (contrôle à distance de l'app Spotify installée, pas un flux MuzziQ/
  * Media3) — hors périmètre de cette V1, pas commencé.
+ *
+ * Sert aussi de "SpotifyPlaylistRepository" (plan §125, ordre de commits) :
+ * plutôt qu'une classe séparée qui n'aurait fait qu'envelopper cette
+ * implémentation déjà complète du contrat `PlaylistRepository`, AppViewModel
+ * utilise directement cette instance comme source additive de playlists
+ * (jamais exclusive à RoomPlaylistRepository/ServerPlaylistRepository — voir
+ * AppViewModel.refreshPlaylists()/playlistRepositoryFor()).
  */
 /** Identité minimale du compte Spotify lié — alimente `LinkedMusicAccountEntity`
  * (externalUserId/displayName/avatarUrl) au moment de la connexion, jamais fabriquée. */
@@ -81,11 +89,14 @@ class SpotifyProvider(
             ),
         )
 
+    /** [PlaylistSummary.provider] = SPOTIFY (§58) : ces playlists ne sont JAMAIS fusionnées
+     * avec une playlist Room/serveur de même nom, même approximativement — l'UI
+     * (PlaylistsScreen) les affiche distinctement avec un badge de provenance. */
     override suspend fun playlists(): Result<List<PlaylistSummary>> = withBearer { bearer ->
         runCatching {
             val res = SpotifyApiClientFactory.web.myPlaylists(bearer)
             if (!res.isSuccessful) error("Playlists Spotify indisponibles (${res.code()})")
-            res.body()?.items.orEmpty().map { PlaylistSummary(it.id, it.name, it.tracks.total) }
+            res.body()?.items.orEmpty().map { PlaylistSummary(it.id, it.name, it.tracks.total, MusicProviderId.SPOTIFY) }
         }
     }
 

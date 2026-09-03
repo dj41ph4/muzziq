@@ -25,14 +25,14 @@ class ServerPlaylistRepository(baseUrl: String, private val cookie: String?) : P
     override suspend fun playlists(): Result<List<PlaylistSummary>> = runCatching {
         val res = api.playlists(cookie)
         if (!res.isSuccessful) error("Playlists indisponibles (${res.code()})")
-        res.body()?.playlists.orEmpty().map { PlaylistSummary(it.id, it.name, it.itemCount) }
+        res.body()?.playlists.orEmpty().map { PlaylistSummary(it.id, it.name, it.itemCount, MusicProviderId.SERVER) }
     }
 
     override suspend fun createPlaylist(name: String): Result<PlaylistSummary> = runCatching {
         val res = api.createPlaylist(CreatePlaylistRequest(name), cookie)
         if (!res.isSuccessful) error("Création impossible (${res.code()})")
         val p = res.body() ?: error("Réponse vide")
-        PlaylistSummary(p.id, p.name, 0)
+        PlaylistSummary(p.id, p.name, 0, MusicProviderId.SERVER)
     }
 
     override suspend fun deletePlaylist(playlistId: String): Result<Unit> = runCatching {
