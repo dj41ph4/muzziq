@@ -48,7 +48,7 @@ class YouTubeMusicStandaloneSource {
         if (extracted.isSuccess) return@withContext extracted
         runCatching {
             val body = JSONObject()
-                .put("context", context())
+                .put("context", playbackContext())
                 .put("videoId", videoId)
                 .toString()
                 .toRequestBody(JSON)
@@ -78,6 +78,13 @@ class YouTubeMusicStandaloneSource {
         .put("client", JSONObject()
             .put("clientName", "WEB_REMIX")
             .put("clientVersion", "1.20260901.01.00")
+            .put("hl", "fr")
+            .put("gl", "BE"))
+
+    private fun playbackContext() = JSONObject()
+        .put("client", JSONObject()
+            .put("clientName", "ANDROID")
+            .put("clientVersion", "20.10.38")
             .put("hl", "fr")
             .put("gl", "BE"))
 
