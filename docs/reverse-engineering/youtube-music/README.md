@@ -470,14 +470,188 @@ séparément). `signatureCipher.ts` n'est donc toujours pas branché dans
 `playbackResolver.ts` ; yt-dlp reste la seule solution qui produit un flux `audio/*`
 réellement jouable de bout en bout, vérifié par un vrai `HTTP 200`/`206`.
 
+## 2026-09-03 (suite 3) — chantier PoToken + UMP engagé, résultat réel mais partiel
+
+Reprise explicite de la "Prochaine étape" ci-dessus : le coût d'un Chromium headless
+embarqué a été jugé acceptable (voir mesures ci-dessous) et le chantier a été engagé
+jusqu'au bout — génération réelle de PoToken via Playwright, parseur UMP, intégration
+dans `playbackResolver.ts`. Résultat honnête : **ça marche réellement, mais seulement
+pour une partie des pistes** — voir "Limite non résolue" plus bas avant de considérer
+ce chemin comme un remplacement de yt-dlp.
+
+### PoToken via Chromium headless persistant — fonctionne, mais l'hypothèse de départ (un jeton réutilisable, caché plusieurs heures) était fausse
+
+Testé réellement (Playwright, Chromium headless, `music.youtube.com/watch?v=…`,
+consentement RGPD géré, lecture déclenchée, requête média réelle interceptée) : le
+`pot` obtenu fonctionne (repli sur la preuve déjà apportée le 2026-09-03 plus haut).
+**Mais l'idée initiale de ce chantier — mettre un seul `pot` en cache plusieurs heures
+comme `signatureTimestamp.ts` le fait pour `sts` — s'est révélée fausse à l'usage**,
+vérifié par deux tests indépendants : deux vidéos différentes capturées (a) dans deux
+pages séparées de la même session, et (b) l'une après l'autre sur la **même** page
+(navigation successive, pas de nouvelle page) produisent chaque fois deux `pot`
+différents. Le `pot` est donc lié à la navigation/au contenu, pas seulement à la
+session — cohérent avec ce que documente indépendamment `metrolist-analysis.md`
+(§ PoToken) : Metrolist appelle `obtainPoToken(identifier)` par vidéo ou par
+`visitorData` selon le profil client, jamais un jeton unique valable pour tout.
+
+Ce qui EST réutilisable et mis en cache (`globalThis`, règle #2) dans
+`src/providers/youtube-music/poTokenBrowser.ts` : le **processus Chromium**
+lui-même, pas une valeur de jeton. Mesuré réellement plusieurs fois sur ce poste,
+navigateur déjà chaud : naviguer vers une nouvelle vidéo et capturer sa requête
+média réelle prend **environ 1,5 à 3 secondes** — pas les dizaines de secondes d'un
+lancement de navigateur à froid. C'est ce qui rend ce chemin praticable comme étape
+de résolution de lecture (comparable au coût déjà accepté du sous-processus yt-dlp).
+
+### Parseur UMP minimal — framing confirmé, un plafond serveur découvert par capture réelle
+
+`src/providers/youtube-music/umpParser.ts`. Structure confirmée par décodage réel
+(pas supposée) : chaque « part » est `[varint type][varint size][size octets de
+payload]`, `varint` en LEB128 standard — confirmé en décodant une vraie part de type
+20 dont le contenu protobuf contient littéralement l'ID vidéo demandé en texte clair
+et l'`itag` demandé (valeur retrouvée exacte dans l'URL de la requête — coïncidence
+exclue). La part de type 21 (« MEDIA ») contient directement les octets bruts du
+conteneur (vérifié : nombre magique EBML `1A 45 DF A3` d'un WebM valide).
+
+**Découverte réelle non anticipée** : le champ `size` d'une part MEDIA ne correspond
+pas de façon fiable au nombre d'octets réellement présents dans la réponse HTTP en
+cours — vérifié sur deux captures indépendantes de tailles très différentes. Le
+parseur prend donc, pour la dernière part MEDIA rencontrée, tout ce qu'il reste
+réellement dans le buffer plutôt que de se fier à `size` — la vérification de
+complétude finale se fait uniquement contre `clen` (le seul champ fiable, dans l'URL
+elle-même), avec une tolérance de 16 octets déterminée empiriquement (un écart de
+quelques octets a été observé même sur une extraction confirmée intégralement
+décodable par `ffmpeg`/`ffprobe`, sans qu'une explication certaine ait été trouvée
+dans le temps de cette session — une vraie troncature se chiffre en centaines de
+milliers d'octets, jamais dans cet ordre de grandeur, donc cette tolérance ne peut
+pas masquer un flux réellement incomplet).
+
+### Vérification réelle de bout en bout — succès, pas fabriqué
+
+Piste courte réelle trouvée via une recherche InnerTube (`nomg-oeSYoE`, "Happy
+Birthday (Short Version)", 17,321s, `clen`=283941) :
+- `GET http://localhost:9910/api/youtube-music/stream/nomg-oeSYoE` → **`HTTP 200`
+  réel, `Content-Type: audio/webm`, 283 944 octets réels.**
+- `ffprobe` : flux Opus, 48kHz, stéréo, `duration=17.321000` — **identique** au `dur`
+  annoncé par l'URL YouTube d'origine.
+- `ffmpeg -i … -f null -` : **code de sortie 0, aucune erreur** ("File ended
+  prematurely" absent — contrairement à la première tentative de cette session sur
+  une piste plus longue, voir plus bas) : décodage complet, réel, vérifié.
+
+Chemin complet emprunté : `resolveYoutubeMusicPlayback()` → `tryPotUmp()` →
+`resolveViaPotUmp()` → `poTokenBrowser.captureAudioPlaybackUrl()` (Chromium réel) →
+`fetch()` avec `range=0-{clen-1}` → `umpParser.parseUmpMedia()` → mis en cache → servi
+par `/api/youtube-music/stream/[videoId]/route.ts`. Aucune étape simulée ou
+court-circuitée pour cette vérification.
+
+### Limite non résolue, honnête : ne fonctionne que pour les pistes courtes
+
+Avant d'arriver au résultat ci-dessus, plusieurs heures d'inspection hexadécimale
+manuelle ont été passées à essayer de reconstituer un flux **long** (`dQw4w9WgXcQ`,
+~3:33, `clen`=3 433 755 octets pour la piste audio) en suivant plusieurs parts MEDIA
+successives. Constat réel et vérifié : au-delà d'un plafond observé identiquement sur
+deux captures indépendantes de contenus différents (environ 2 097 105 octets), les
+parts suivantes (types réellement rencontrés : 29, 33, 43, une seconde part de type
+20 avec une taille déclarée manifestement incohérente) n'ont pas pu être décodées de
+façon fiable — soit leur taille déclarée dépasse ce qu'il reste réellement dans la
+réponse d'une façon qui ne se résout pas en "prendre le reste du buffer" comme pour
+la dernière part MEDIA, soit le point atteint après leur saut ne ressemble plus à un
+en-tête de part valide. Extraire uniquement la première part dans ce cas donne un
+fichier WebM/Opus **valide mais tronqué** (vérifié : `ffprobe` y lit correctement le
+flux et une durée totale exacte embarquée dans les métadonnées du conteneur, mais
+`ffmpeg -f null -` s'arrête avec "File ended prematurely" — décodage réel jusqu'au
+point de troncature, pas au-delà).
+
+**Décision délibérée, appliquée dans le code** : `parseUmpMedia()` ne déclare
+`complete: true` que si le total extrait correspond (à la tolérance de 16 octets
+près) à `clen` — jamais par optimisme. `resolveViaPotUmp()` renvoie `null` si
+`complete` est faux, et `tryPotUmp()` dans `playbackResolver.ts` retombe alors sur
+yt-dlp, exactement comme si ce chemin n'existait pas. **Aucun flux tronqué n'est
+jamais servi comme s'il était complet.** Conséquence pratique : ce chemin ne produit
+un résultat utilisable que pour des pistes dont la totalité tient dans une seule part
+MEDIA — en pratique, l'équivalent d'environ deux minutes à un débit Opus typique
+(128 kbps) — donc une minorité des morceaux réels d'une bibliothèque musicale.
+`playbackResolver.ts` évite d'ailleurs de payer le coût du navigateur headless pour
+les pistes visiblement trop longues : `contentLength` est déjà connu via la réponse
+InnerTube (sans PoToken) obtenue juste avant, et sert de garde-fou
+(`POT_UMP_SIZE_GUARD_BYTES`) pour ne tenter ce chemin que quand il a une vraie chance
+d'aboutir.
+
+### Pourquoi ne pas avoir cherché plus longtemps à résoudre le cas long
+
+Cette limite n'est pas un abandon par manque d'effort — c'est une décision consciente
+après un temps raisonnable de rétro-ingénierie manuelle sans résultat certain (voir
+détail dans l'historique de session), pour éviter exactement l'écueil déjà rencontré
+dans ce rapport (2026-09-01, conclusion tirée trop vite puis corrigée) : mieux vaut un
+résultat partiel vérifié et honnêtement borné qu'un parseur "presque bon" qui
+fabriquerait un flux incorrect pour la majorité des morceaux réels. yt-dlp reste donc,
+pour toute piste de longueur normale, la seule solution qui produit réellement un flux
+`audio/*` complet et jouable de bout en bout — ce chemin PoToken/UMP est un
+complément réel pour les pistes courtes, pas un remplacement.
+
+### Fichiers
+
+- `src/providers/youtube-music/poTokenBrowser.ts` — Chromium headless persistant
+  (`globalThis`), capture de l'URL média réelle par interception réseau.
+- `src/providers/youtube-music/umpParser.ts` — parseur UMP minimal (voir plus haut).
+- `src/providers/youtube-music/potUmpResolver.ts` — orchestration + cache de
+  quelques minutes des octets extraits.
+- `src/app/api/youtube-music/stream/[videoId]/route.ts` — sert ces octets avec un
+  vrai `Content-Type: audio/*`.
+- `playbackResolver.ts` — nouveau niveau `tryPotUmp()`, entre InnerTube et yt-dlp,
+  gardé par `POT_UMP_SIZE_GUARD_BYTES`.
+
+## Portabilité Android — ce chantier ne se porte PAS tel quel, et pourquoi
+
+Consigne explicite de la session qui a mené ce chantier : le but final n'est pas que
+le serveur MuzziQ seul sache lire YouTube Music, c'est que l'app Android future
+puisse le faire **sans serveur**. Un Chromium headless côté serveur Node (Playwright)
+n'est **pas** portable à Android tel quel — pas de binaire Playwright/Chromium sur
+mobile, et même si un tel binaire existait, l'app Android ne doit pas embarquer un
+Chromium complet (~300-400 Mo) pour ce seul usage.
+
+`metrolist-analysis.md` (§ PoToken) documente comment Metrolist résout un problème
+équivalent sur Android : **une `WebView` Android embarquée**, pas un navigateur
+serveur — un asset HTML local (`po_token.html`) est chargé dans une `WebView`
+headless (JavaScript activé, chargement réseau bloqué), qui exécute le même challenge
+BotGuard que ce que Playwright fait ici côté serveur. C'est un mécanisme
+**potentiellement portable** à un client Android MuzziQ standalone (Phase I du plan,
+pas encore commencée — voir CLAUDE.md, "Ce qui n'est PAS encore fait"), car une
+`WebView` est un composant Android standard, contrairement à un Chromium serveur.
+
+**Conclusion explicite, à ne pas perdre pour un futur chantier Android** : ce que ce
+chantier serveur prouve, c'est le **mécanisme général** (un vrai moteur de rendu
+JavaScript peut obtenir un PoToken valide ; jsdom sans moteur de rendu réel ne le
+peut pas, voir 2026-09-02 plus haut) — **pas** une implémentation directement
+réutilisable sur Android. Un futur chantier Android dédié devra réimplémenter
+l'équivalent via `WebView` (asset HTML local + `evaluateJavascript`/pont JS-natif),
+en s'inspirant du comportement documenté ci-dessus, **jamais** en copiant le code
+Metrolist (GPL-3.0, voir règle Metrolist en tête de ce dossier). Le parseur UMP
+(`umpParser.ts`), lui, est un pur TypeScript sans dépendance navigateur — celui-là
+est directement réutilisable tel quel (ou porté à Kotlin) une fois un PoToken obtenu
+par n'importe quel moyen, serveur ou WebView.
+
+## Poids Docker — coût assumé, non mesuré dans cette session
+
+`packaging/docker/Dockerfile` installe désormais Chromium via le dépôt Alpine (même
+correctif déjà appliqué à yt-dlp : le binaire officiel Playwright est lié à glibc et
+ne tourne pas sur Alpine/musl) et pointe `MUZZIQ_CHROMIUM_PATH` dessus.
+**Avertissement honnête** : contrairement au reste de ce rapport, ce bloc Dockerfile
+n'a **pas** été vérifié par un vrai build Docker dans cette session (faute de temps) —
+seul le code TypeScript a été vérifié par des appels réels à `music.youtube.com`
+depuis ce poste de développement (Windows, Chromium Playwright déjà installé
+localement). Chromium ajoute de l'ordre de 300-400 Mo à l'image runtime — coût réel,
+assumé, documenté ici plutôt que caché, mais **à vérifier par un vrai build + un vrai
+appel avant de considérer ce chemin fiable en production** (règle #5 du projet).
+`poTokenBrowser.ts` échoue proprement (capturé, jamais fatal) si Chromium est absent
+ou ne se lance pas — la résolution retombe alors sur yt-dlp, jamais de panne totale.
+
 ## Prochaine étape (non faite)
 
-- Décider si le coût d'un Chromium headless embarqué + solveur UMP (pour exploiter
-  le `pot` désormais accessible en pratique via Playwright) devient un chantier
-  prioritaire, ou si yt-dlp reste suffisant indéfiniment (§105.9 — dans l'état
-  actuel, il ne bloque rien).
-- Si ce chantier est engagé un jour : étudier le protocole UMP lui-même (framing,
-  segmentation) avant toute implémentation — pas de code écrit dans ce rapport sur
-  ce point, seule la présence du `Content-Type: application/vnd.yt-ump` a été
-  constatée.
-Sous-projet à part entière, pas un correctif ponctuel.
+- Résoudre la reconstruction des flux longs (au-delà d'une seule part MEDIA UMP) —
+  demanderait de comprendre les types de part 29/33/43 rencontrés réellement (voir
+  plus haut), pas fait dans cette session malgré plusieurs heures d'essai honnête.
+- Vérifier par un vrai build Docker (pas seulement en local) que le Chromium Alpine
+  fonctionne réellement dans le conteneur runtime, pas seulement supposé d'après le
+  correctif déjà connu pour yt-dlp.
+- Décider si un chantier Android dédié (WebView PoToken, voir section ci-dessus)
+  devient prioritaire une fois la Phase I (client Android) commencée.
