@@ -49,7 +49,7 @@ fun SearchScreen(
                 color = MuzziQColors.TextPrimary,
                 fontSize = 24.sp,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, top = 12.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
             )
             OutlinedTextField(
                 value = query,
