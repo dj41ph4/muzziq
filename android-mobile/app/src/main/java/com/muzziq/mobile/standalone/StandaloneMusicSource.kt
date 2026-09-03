@@ -63,6 +63,13 @@ class StandaloneMusicSource(context: Context) : MusicSource {
         }
     }
 
+    fun markOnlineStreamRejected(track: Track) {
+        (track.source as? TrackSource.YouTube)?.let { youtube.markCurrentProfileRejected(it.videoId) }
+    }
+
+    fun onlineMimeType(track: Track): String? =
+        (track.source as? TrackSource.YouTube)?.let { youtube.selectedMimeType(it.videoId) }
+
     fun recordPlayback(track: Track, positionMs: Long, durationMs: Long) {
         val uri = (track.source as? TrackSource.Local)?.contentUri ?: return
         db.recordPlayEvent(uri, track.artist, positionMs, durationMs)

@@ -1,6 +1,7 @@
 package com.muzziq.mobile.playback
 
 import android.app.PendingIntent
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -23,6 +24,7 @@ import com.muzziq.mobile.data.QueueStateStore
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.providers.youtube.YouTubeMusicStandaloneSource
 import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
+import com.muzziq.mobile.standalone.StandaloneMusicSource
 import com.muzziq.mobile.domain.PlaylistSummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,6 +70,7 @@ class PlaybackService : MediaLibraryService() {
         set(value) { _queueIndex.value = value }
 
     private var queueSource: MusicSource? = null
+    private var consecutiveOnlineStreamRetries = 0
     private val queueStateStore by lazy { QueueStateStore(this) }
 
     // Rempli à chaque construction d'item navigable (onGetChildren) — consulté par
@@ -101,9 +104,24 @@ class PlaybackService : MediaLibraryService() {
 
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) consecutiveOnlineStreamRetries = 0
                 if (state == Player.STATE_ENDED) {
                     recordAffinity(completed = true)
                     if (hasNext()) skipNext()
+                }
+            }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                val track = currentTrack
+                val source = queueSource
+                Log.e(TAG, "Lecture échouée: ${error.errorCodeName}", error)
+                if (
+                    track?.source is com.muzziq.mobile.data.model.TrackSource.YouTube &&
+                    source is StandaloneMusicSource &&
+                    consecutiveOnlineStreamRetries < MAX_ONLINE_STREAM_RETRIES
+                ) {
+                    consecutiveOnlineStreamRetries += 1
+                    source.markOnlineStreamRejected(track)
+                    scope.launch { resolveAndPlay(track, source) }
                 }
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -198,6 +216,7 @@ class PlaybackService : MediaLibraryService() {
         val mediaItem = MediaItem.Builder()
             .setUri(url)
             .setMediaId(track.id)
+            .setMimeType((source as? StandaloneMusicSource)?.onlineMimeType(track))
             .setMediaMetadata(metadata)
             .build()
         player.setMediaItem(mediaItem)
@@ -387,6 +406,8 @@ class PlaybackService : MediaLibraryService() {
     }
 
     companion object {
+        private const val TAG = "MuzziQPlayback"
+        private const val MAX_ONLINE_STREAM_RETRIES = 2
         const val ROOT_ID = "muzziq_root"
         const val LIBRARY_ID = "muzziq_library"
         const val PLAYLISTS_ID = "muzziq_playlists"

@@ -11,6 +11,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import org.json.JSONArray
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
 
 /** Client minimal YouTube Music côté Android. Aucune requête ne passe par MuzziQ. */
 class YouTubeMusicStandaloneSource {
@@ -18,6 +19,8 @@ class YouTubeMusicStandaloneSource {
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
+    private val selectedProfiles = ConcurrentHashMap<String, PlaybackProfile>()
+    private val rejectedProfiles = ConcurrentHashMap<String, MutableSet<String>>()
 
     suspend fun search(query: String): Result<List<Track>> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext Result.success(emptyList())
@@ -45,7 +48,8 @@ class YouTubeMusicStandaloneSource {
         val videoId = (track.source as? TrackSource.YouTube)?.videoId
             ?: return@withContext Result.failure(IllegalArgumentException("Source YouTube invalide"))
         var lastError: Throwable? = null
-        for (profile in playbackProfiles) {
+        val rejected = rejectedProfiles[videoId].orEmpty()
+        for (profile in playbackProfiles.filterNot { it.name in rejected }) {
             val result = runCatching {
                 val body = JSONObject()
                     .put("context", profile.context())
@@ -77,11 +81,23 @@ class YouTubeMusicStandaloneSource {
                 bestAudio.getString("url")
             }
             val url = result.getOrNull()
-            if (url != null) return@withContext Result.success(url)
+            if (url != null) {
+                selectedProfiles[videoId] = profile
+                return@withContext Result.success(url)
+            }
             lastError = result.exceptionOrNull()
         }
         Result.failure(lastError ?: IllegalStateException("Aucun profil InnerTube n'a fourni de flux audio"))
     }
+
+    /** Le CDN a refusé le flux après résolution : ne réessaie jamais le même
+     * profil pour cette vidéo pendant la session et force le profil suivant. */
+    fun markCurrentProfileRejected(videoId: String) {
+        val profile = selectedProfiles.remove(videoId) ?: return
+        rejectedProfiles.getOrPut(videoId) { ConcurrentHashMap.newKeySet() }.add(profile.name)
+    }
+
+    fun selectedMimeType(videoId: String): String? = selectedProfiles[videoId]?.mimeType
 
     private fun context() = JSONObject()
         .put("client", JSONObject()
@@ -95,6 +111,7 @@ class YouTubeMusicStandaloneSource {
         val version: String,
         val clientId: String,
         val userAgent: String,
+        val mimeType: String,
     ) {
         fun context() = JSONObject().put("client", JSONObject()
             .put("clientName", name)
@@ -214,10 +231,10 @@ class YouTubeMusicStandaloneSource {
         const val PLAYBACK_USER_AGENT =
             "com.google.ios.youtube/21.03.1 (iPhone16,2; U; CPU iOS 18_2 like Mac OS X;)"
         private val playbackProfiles = listOf(
-            PlaybackProfile("IOS", "21.03.1", "5", PLAYBACK_USER_AGENT),
+            PlaybackProfile("IOS", "21.03.1", "5", PLAYBACK_USER_AGENT, "audio/mp4"),
             PlaybackProfile(
                 "ANDROID", "20.10.38", "3",
-                "com.google.android.youtube/20.10.38 (Linux; U; Android 14)"
+                "com.google.android.youtube/20.10.38 (Linux; U; Android 14)", "audio/webm"
             ),
         )
     }
