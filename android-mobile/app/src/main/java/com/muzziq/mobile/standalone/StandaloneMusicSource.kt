@@ -19,7 +19,7 @@ class StandaloneMusicSource(context: Context) : MusicSource {
 
     private val scanner = LocalLibraryScanner(context)
     private val db = LocalTasteDatabase(context)
-    private val youtube = YouTubeMusicStandaloneSource()
+    private val youtube = YouTubeMusicStandaloneSource(context.applicationContext)
 
     /** À appeler après l'octroi de la permission READ_MEDIA_AUDIO — remplit le cache SQLite
      * depuis MediaStore. Idempotent, peut être relancé (pull-to-refresh bibliothèque). */
@@ -69,6 +69,8 @@ class StandaloneMusicSource(context: Context) : MusicSource {
 
     fun onlineMimeType(track: Track): String? =
         (track.source as? TrackSource.YouTube)?.let { youtube.selectedMimeType(it.videoId) }
+
+    fun onlineStreamHeaders(uri: android.net.Uri): Map<String, String> = youtube.streamHeaders(uri.toString())
 
     fun recordPlayback(track: Track, positionMs: Long, durationMs: Long) {
         val uri = (track.source as? TrackSource.Local)?.contentUri ?: return

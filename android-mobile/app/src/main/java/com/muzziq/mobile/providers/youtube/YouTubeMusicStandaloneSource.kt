@@ -1,5 +1,6 @@
 package com.muzziq.mobile.providers.youtube
 
+import android.content.Context
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
 import kotlinx.coroutines.Dispatchers
@@ -14,13 +15,15 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
 
 /** Client minimal YouTube Music côté Android. Aucune requête ne passe par MuzziQ. */
-class YouTubeMusicStandaloneSource {
+class YouTubeMusicStandaloneSource(context: Context) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
-    private val selectedProfiles = ConcurrentHashMap<String, PlaybackProfile>()
+    private val extractor = StandaloneStreamExtractor(context)
+    private val selectedStreams = ConcurrentHashMap<String, ResolvedOnlineStream>()
     private val rejectedProfiles = ConcurrentHashMap<String, MutableSet<String>>()
+    private val streamHeadersByUrl = ConcurrentHashMap<String, Map<String, String>>()
 
     suspend fun search(query: String): Result<List<Track>> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext Result.success(emptyList())
@@ -49,6 +52,20 @@ class YouTubeMusicStandaloneSource {
             ?: return@withContext Result.failure(IllegalArgumentException("Source YouTube invalide"))
         var lastError: Throwable? = null
         val rejected = rejectedProfiles[videoId].orEmpty()
+        if ("extractor" !in rejected) {
+            val extracted = extractor.resolve(videoId).mapCatching { stream ->
+                check(probeAudioStream(stream.url, stream.headers)) {
+                    "Le CDN a refusé le flux extrait avant lecture"
+                }
+                stream
+            }
+            extracted.getOrNull()?.let { stream ->
+                selectedStreams[videoId] = stream
+                streamHeadersByUrl[stream.url] = stream.headers
+                return@withContext Result.success(stream.url)
+            }
+            lastError = extracted.exceptionOrNull()
+        }
         for (profile in playbackProfiles.filterNot { it.name in rejected }) {
             val result = runCatching {
                 val body = JSONObject()
@@ -78,12 +95,17 @@ class YouTubeMusicStandaloneSource {
                     .filter { it.optString("mimeType").startsWith("audio/") && it.optString("url").isNotBlank() }
                     .maxByOrNull { it.optLong("bitrate", 0L) }
                     ?: error("InnerTube n'a retourné aucun flux audio direct")
-                bestAudio.getString("url")
+                val url = bestAudio.getString("url")
+                check(probeAudioStream(url, profile.streamHeaders())) {
+                    "Le CDN a refusé le flux ${profile.name} avant lecture"
+                }
+                ResolvedStream(url, profile)
             }
-            val url = result.getOrNull()
-            if (url != null) {
-                selectedProfiles[videoId] = profile
-                return@withContext Result.success(url)
+            val stream = result.getOrNull()
+            if (stream != null) {
+                selectedStreams[videoId] = stream.toOnlineStream()
+                streamHeadersByUrl[stream.url] = stream.profile.streamHeaders()
+                return@withContext Result.success(stream.url)
             }
             lastError = result.exceptionOrNull()
         }
@@ -93,11 +115,30 @@ class YouTubeMusicStandaloneSource {
     /** Le CDN a refusé le flux après résolution : ne réessaie jamais le même
      * profil pour cette vidéo pendant la session et force le profil suivant. */
     fun markCurrentProfileRejected(videoId: String) {
-        val profile = selectedProfiles.remove(videoId) ?: return
-        rejectedProfiles.getOrPut(videoId) { ConcurrentHashMap.newKeySet() }.add(profile.name)
+        val stream = selectedStreams.remove(videoId) ?: return
+        streamHeadersByUrl.remove(stream.url)
+        val key = if (stream.profileKey.startsWith("extractor:")) "extractor" else stream.profileKey
+        rejectedProfiles.getOrPut(videoId) { ConcurrentHashMap.newKeySet() }.add(key)
     }
 
-    fun selectedMimeType(videoId: String): String? = selectedProfiles[videoId]?.mimeType
+    fun selectedMimeType(videoId: String): String? = selectedStreams[videoId]?.mimeType
+
+    /** En-têtes du profil ayant effectivement validé cette URL, consommés par Media3. */
+    fun streamHeaders(url: String): Map<String, String> = streamHeadersByUrl[url].orEmpty()
+
+    /** Une lecture de deux octets avec Range valide l'URL signée et le profil avant
+     * de déléguer au player. Une 200 est aussi acceptable : certains CDN ignorent
+     * volontairement la petite plage demandée. */
+    private fun probeAudioStream(url: String, headers: Map<String, String>): Boolean {
+        val request = Request.Builder()
+            .url(url)
+            .header("Range", "bytes=0-1")
+            .apply { headers.forEach { (name, value) -> header(name, value) } }
+            .build()
+        return client.newCall(request).execute().use { response ->
+            response.code == 200 || response.code == 206
+        }
+    }
 
     private fun context() = JSONObject()
         .put("client", JSONObject()
@@ -118,6 +159,25 @@ class YouTubeMusicStandaloneSource {
             .put("clientVersion", version)
             .put("hl", "fr")
             .put("gl", "BE"))
+
+        fun streamHeaders(): Map<String, String> = buildMap {
+            put("User-Agent", userAgent)
+            put("Accept", "*/*")
+            put("Accept-Language", "fr-BE,fr;q=0.9")
+            if (name == "WEB_REMIX") {
+                put("Origin", "https://music.youtube.com")
+                put("Referer", "https://music.youtube.com/")
+            }
+        }
+    }
+
+    private data class ResolvedStream(val url: String, val profile: PlaybackProfile) {
+        fun toOnlineStream() = ResolvedOnlineStream(
+            url = url,
+            mimeType = profile.mimeType,
+            headers = profile.streamHeaders(),
+            profileKey = profile.name,
+        )
     }
 
     private fun parseSearch(root: JSONObject): List<Track> {

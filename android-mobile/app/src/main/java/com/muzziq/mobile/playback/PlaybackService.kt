@@ -22,7 +22,6 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.muzziq.mobile.data.MusicSource
 import com.muzziq.mobile.data.QueueStateStore
 import com.muzziq.mobile.data.model.Track
-import com.muzziq.mobile.providers.youtube.YouTubeMusicStandaloneSource
 import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
 import com.muzziq.mobile.standalone.StandaloneMusicSource
 import com.muzziq.mobile.domain.PlaylistSummary
@@ -81,14 +80,13 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
-        // Les URLs audio directes sont émises par un profil InnerTube dédié.
-        // Media3 doit conserver une empreinte de client média cohérente quand il
-        // ouvre ensuite ces URLs (Range est ajouté par OkHttpDataSource lui-même).
+        // Chaque flux en ligne a son propre profil et ses propres en-têtes. Ils
+        // sont injectés par URL lors de chaque ouverture/reprise du DataSpec.
         val httpDataSourceFactory = OkHttpDataSource.Factory(okhttp3.OkHttpClient())
-            .setDefaultRequestProperties(
-                mapOf("User-Agent" to YouTubeMusicStandaloneSource.PLAYBACK_USER_AGENT)
-            )
-        val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
+        val dataSourceFactory = DefaultDataSource.Factory(
+            this,
+            StreamHeaderDataSourceFactory(httpDataSourceFactory),
+        )
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
         val audioAttributes = AudioAttributes.Builder()
