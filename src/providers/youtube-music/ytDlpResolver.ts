@@ -44,17 +44,30 @@ export interface YtDlpAudioFormat {
 /** Résout la meilleure URL de flux audio directe pour un videoId, ou lève une erreur explicite. */
 export async function resolveStreamUrl(videoId: string): Promise<YtDlpAudioFormat> {
   const bin = resolveBinaryPath();
-  try {
-    const { stdout } = await execFileAsync(
-      bin,
-      ["-f", "bestaudio", "-j", "--no-playlist", "--no-warnings", `https://music.youtube.com/watch?v=${videoId}`],
-      { timeout: 15000, maxBuffer: 20 * 1024 * 1024 }
-    );
-    const info = JSON.parse(stdout);
-    if (!info.url) throw new Error("yt-dlp n'a renvoyé aucune URL de flux");
-    return { url: info.url, ext: info.ext, abr: info.abr, acodec: info.acodec };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`yt-dlp a échoué pour ${videoId}: ${message}`);
+  const url = `https://music.youtube.com/watch?v=${videoId}`;
+  const attempts: string[][] = [
+    ["-f", "bestaudio/best"],
+    ["-f", "best[acodec!=none]/best", "--extractor-args", "youtube:player_client=default,web_music"],
+    ["-f", "best", "--extractor-args", "youtube:player_client=default,web_music"],
+  ];
+  let lastError = "aucun format exploitable";
+
+  for (const formatArgs of attempts) {
+    try {
+      const { stdout } = await execFileAsync(
+        bin,
+        [...formatArgs, "-j", "--no-playlist", "--no-warnings", url],
+        { timeout: 20000, maxBuffer: 20 * 1024 * 1024 }
+      );
+      const info = JSON.parse(stdout);
+      if (typeof info.url === "string" && info.url.length > 0) {
+        return { url: info.url, ext: info.ext, abr: info.abr, acodec: info.acodec };
+      }
+      lastError = "yt-dlp n'a renvoyé aucune URL de flux";
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+    }
   }
+
+  throw new Error(`yt-dlp a échoué pour ${videoId}: ${lastError}`);
 }
