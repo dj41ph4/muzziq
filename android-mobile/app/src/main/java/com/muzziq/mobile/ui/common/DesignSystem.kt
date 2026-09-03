@@ -29,7 +29,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
-import coil.compose.SubcomposeAsyncImageContent
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
 /**
@@ -114,6 +113,10 @@ private fun MediaCover(
         }
         return
     }
+    // Pas de lambda `content` trailing ici : le slot `loading`/`error` de cette surcharge
+    // Coil retombe déjà sur SubcomposeAsyncImageContent() par défaut pour l'état succès —
+    // en ajouter un explicitement fait échouer la résolution de surcharge (erreur réelle
+    // trouvée par le CI : "Argument type mismatch... EqualityDelegate").
     SubcomposeAsyncImage(
         model = artworkUrl,
         contentDescription = null,
@@ -127,9 +130,7 @@ private fun MediaCover(
                 Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MuzziQColors.TextFaint)
             }
         },
-    ) {
-        SubcomposeAsyncImageContent()
-    }
+    )
 }
 
 /** Card carrée générique pour un carrousel (titre + morceau/album/playlist) — §56 SquareMediaCard. */

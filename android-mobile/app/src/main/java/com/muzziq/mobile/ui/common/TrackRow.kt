@@ -21,7 +21,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
-import coil.compose.SubcomposeAsyncImageContent
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
@@ -44,6 +43,9 @@ fun TrackRow(track: Track, onClick: () -> Unit) {
                 Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MuzziQColors.TextFaint, modifier = Modifier.size(20.dp))
             }
         } else {
+            // Pas de lambda `content` trailing : cette surcharge Coil retombe déjà sur
+            // SubcomposeAsyncImageContent() par défaut pour l'état succès (voir DesignSystem.kt,
+            // MediaCover — même erreur de résolution de surcharge trouvée par le CI ici).
             SubcomposeAsyncImage(
                 model = track.artworkUrl,
                 contentDescription = null,
@@ -57,9 +59,7 @@ fun TrackRow(track: Track, onClick: () -> Unit) {
                         Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MuzziQColors.TextFaint, modifier = Modifier.size(20.dp))
                     }
                 },
-            ) {
-                SubcomposeAsyncImageContent()
-            }
+            )
         }
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

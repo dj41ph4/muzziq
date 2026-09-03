@@ -51,7 +51,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
-import coil.compose.SubcomposeAsyncImageContent
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
 import com.muzziq.mobile.ui.common.Skeleton
@@ -109,15 +108,17 @@ fun SharedTransitionScope.MiniPlayer(
             if (track.artworkUrl == null) {
                 Skeleton(coverModifier, RoundedCornerShape(6.dp))
             } else {
+                // Pas de lambda `content` trailing : cette surcharge Coil retombe déjà sur
+                // SubcomposeAsyncImageContent() par défaut pour l'état succès (voir
+                // DesignSystem.kt, MediaCover — erreur de résolution de surcharge trouvée
+                // par le CI en l'ajoutant).
                 SubcomposeAsyncImage(
                     model = track.artworkUrl,
                     contentDescription = null,
                     modifier = coverModifier,
                     loading = { Skeleton(Modifier.size(44.dp), RoundedCornerShape(6.dp)) },
                     error = { Skeleton(Modifier.size(44.dp), RoundedCornerShape(6.dp)) },
-                ) {
-                    SubcomposeAsyncImageContent()
-                }
+                )
             }
             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                 Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
@@ -196,9 +197,7 @@ fun SharedTransitionScope.PlayerScreen(
                         modifier = coverModifier,
                         loading = { Skeleton(Modifier.fillMaxSize(), RoundedCornerShape(16.dp)) },
                         error = { Skeleton(Modifier.fillMaxSize(), RoundedCornerShape(16.dp)) },
-                    ) {
-                        SubcomposeAsyncImageContent()
-                    }
+                    )
                 }
             }
 
