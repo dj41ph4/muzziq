@@ -13,13 +13,13 @@
  *
  * Ce `sts` change à chaque déploiement du lecteur YouTube (`base.js`) — il y
  * est embarqué en clair (`signatureTimestamp:20684`). On le récupère en
- * cherchant l'URL du lecteur courant dans le HTML de music.youtube.com, puis
- * en extrayant la constante par une simple expression régulière — aucune
+ * extrayant la constante du script courant (voir `basePlayerScript.ts` pour
+ * le téléchargement/cache du script lui-même, partagé avec
+ * `signatureCipher.ts`) par une simple expression régulière — aucune
  * exécution de JavaScript distant, aucun bac à sable, aucun navigateur.
- *
- * Ce module ne résout PAS le déchiffrement de `signatureCipher` (voir
- * playbackResolver.ts pour pourquoi ce n'est délibérément pas tenté ici).
  */
+
+import { getBasePlayerScript } from "./basePlayerScript";
 
 const g = globalThis as typeof globalThis & {
   __muzziqYtSts?: { value: number; fetchedAt: number } | null;
@@ -27,32 +27,13 @@ const g = globalThis as typeof globalThis & {
 };
 
 const STS_TTL_MS = 6 * 60 * 60 * 1000; // 6h — le sts ne change qu'à un déploiement du lecteur, marge large.
-const BROWSER_USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
 async function fetchCurrentSts(): Promise<number | null> {
-  try {
-    const homeRes = await fetch("https://music.youtube.com/", {
-      headers: { "User-Agent": BROWSER_USER_AGENT },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!homeRes.ok) return null;
-    const html = await homeRes.text();
-    const playerPathMatch = html.match(/\/s\/player\/[a-zA-Z0-9_/.]+base\.js/);
-    if (!playerPathMatch) return null;
-
-    const playerRes = await fetch(`https://music.youtube.com${playerPathMatch[0]}`, {
-      headers: { "User-Agent": BROWSER_USER_AGENT },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!playerRes.ok) return null;
-    const playerJs = await playerRes.text();
-    const stsMatch = playerJs.match(/signatureTimestamp:(\d+)/);
-    if (!stsMatch) return null;
-    return Number(stsMatch[1]);
-  } catch {
-    return null;
-  }
+  const script = await getBasePlayerScript();
+  if (!script) return null;
+  const stsMatch = script.text.match(/signatureTimestamp:(\d+)/);
+  if (!stsMatch) return null;
+  return Number(stsMatch[1]);
 }
 
 /** Renvoie le `signatureTimestamp` courant (caché ~6h), ou `null` si indisponible (jamais bloquant). */

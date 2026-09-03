@@ -205,22 +205,166 @@ modifié : `tryInnertube()` reste tenté en premier (ne coûte rien, redevient
 utile si YouTube sert un jour une URL en clair) et retombe systématiquement
 sur `ytDlpResolver.ts`.
 
+## 2026-09-03 (suite) — le déchiffrement est réellement résolu ; un nouveau mur découvert après
+
+Reprise de l'investigation avec un objectif explicite : ne pas s'arrêter à la
+première piste négative, aller jusqu'à un résultat réel (flux audio jouable,
+prouvé par un `HTTP 200`/`206` + `Content-Type: audio/*`), en suivant l'ordre
+de pistes suggéré par l'étude d'architecture de Metrolist
+(`metrolist-analysis.md`, recherche pure, aucun code copié) : (a) configs
+distantes pré-résolues par hash de player, puis (b) exécution JS réelle en
+bac à sable si (a) ne suffit pas.
+
+### (a) Registre communautaire pré-résolu (`ZemerTeam/zemer-cipher`) — testé, partiellement exploitable
+
+`metrolist-analysis.md` documente que Metrolist consulte un registre JSON
+public tenu par un projet tiers, `ZemerTeam/zemer-cipher`
+(`https://raw.githubusercontent.com/ZemerTeam/zemer-cipher/master/library/src/main/assets/player_configs.json`),
+qui associe à chaque hash de `base.js` une formule `"sig":"NOM(v,q,INPUT)"` —
+les deux constantes numériques qui sélectionnent la bonne branche dans le
+lecteur obfusqué de cette version précise. Récupéré réellement le
+2026-09-03 : **le hash du player couramment servi par music.youtube.com
+(`9470c977`) y figure bel et bien**, avec l'entrée
+`{"sig":"Of(2,137,INPUT)","nClass":"wO","sts":20696,"aliases":["9f1ba9db"]}`
+— et son `sts` (20696) correspond exactement à celui extrait indépendamment
+par `signatureTimestamp.ts` sur ce même build, ce qui confirme que
+l'entrée correspond bien au fichier réellement servi.
+
+**Mais cette formule n'a pas pu être appliquée telle quelle.** Le nom `Of`
+qu'elle porte ne correspond à aucune fonction du `base.js` réellement
+téléchargé (vérifié : aucune déclaration `Of=function` n'existe dans le
+fichier — `Of` y désigne autre chose, une propriété interne sans rapport).
+Le registre Zemer est manifestement généré par l'outillage propre de ce
+projet tiers (probablement une analyse structurelle/AST, pas une simple
+recherche de nom), et le nom qu'il stocke n'est donc utile qu'à *leur*
+solveur, pas portable tel quel sans reproduire leur méthode d'extraction —
+que ce rapport n'a pas cherché à rétro-ingénierier (hors périmètre : ça
+reviendrait à porter leur algorithme, pas à observer un comportement).
+Cette piste (a) est donc **une donnée réelle et vérifiable, mais pas
+directement exploitable ici sans réimplémenter la méthode d'extraction du
+projet tiers** — un axe honnête à retenter plus tard si le besoin
+d'éliminer yt-dlp devient prioritaire, pas un échec de principe.
+
+### (b) Déchiffrement réel du `signatureCipher` — RÉSOLU et vérifié
+
+En parallèle, analyse manuelle directe du `base.js` réel (hash `9470c977`,
+2 588 733 caractères, `music.youtube.com` et `www.youtube.com` servent
+strictement le même fichier — vérifié par comparaison octet à octet).
+Contrairement à la conclusion (trop rapide) du 2026-09-03 plus haut, le
+pattern classique documenté publiquement (`split("")` littéral) n'a pas
+disparu : il est simplement caché derrière deux couches d'obfuscation
+combinées jamais rencontrées dans les extracteurs publics de référence
+consultés lors de cette investigation :
+
+1. **Une table de chaînes indexée** (`var p="indexOf;length;...;split;...;
+   reverse;...".split(";")`) : chaque nom de propriété/méthode réel
+   (`"split"`, `"join"`, `"reverse"`, `"splice"`) est remplacé par `p[N]`,
+   `N` étant lui-même souvent un XOR (`p[y^2373]`) plutôt qu'un littéral.
+2. **Un dispatcher unique par « control-flow flattening »** : une seule
+   fonction à 4 paramètres (`P2(v,q,x,X)` dans ce build) sert à des dizaines
+   d'usages sans rapport entre eux ; le paramètre `v`, combiné à des
+   conditions bit à bit (`(v+2&62)<v&&(v+2^23)>=v`), sélectionne laquelle
+   des branches internes s'exécute réellement pour un appel donné.
+
+Après extraction manuelle des trois éléments réels (la table `p`, un objet à
+trois méthodes `swap`/`splice`/`reverse` — `HR`/`hC`/`ET` dans ce build —,
+et le dispatcher qui les enchaîne), et localisation du point d'appel réel
+pour un format (`M.s`/`M.sp`, les noms de champs de l'API InnerTube
+elle-même, stables par nature), la séquence d'opérations réelle
+s'est révélée être : `reverse(s)` puis `splice(s,0,1)` puis
+`swap(s,0,3)` puis `swap(s,0,12)` — exactement la même famille d'opérations
+que celle documentée publiquement depuis des années pour ce problème, sous
+deux couches d'obfuscation en plus.
+
+**Double vérification indépendante, pas une seule** : (1) réimplémentation
+manuelle en TypeScript de cette séquence, et (2) extraction du code source
+réel (la table, l'objet à trois méthodes, le dispatcher) et exécution
+littérale — pas retranscrite — dans un bac à sable Node (`vm`), sans aucune
+réécriture manuelle des opérations. **Les deux méthodes produisent un
+résultat strictement identique, caractère pour caractère**, sur plusieurs
+échantillons réels de `signatureCipher` capturés en direct. Le résultat a
+en plus la même structure/préfixe (`AE0s2JYwR...`) qu'une signature obtenue
+via yt-dlp pour la même vidéo au même moment — cohérence forte avec un
+déchiffrement correct (une permutation fausse produirait un résultat sans
+rapport avec ce préfixe attendu, pas un résultat qui lui ressemble par
+hasard).
+
+Ce déchiffrement est implémenté dans `src/providers/youtube-music/
+signatureCipher.ts`, avec une extraction **structurelle** (regex sur la
+*forme* du code : table `var X="...".split(";")`, objet à trois méthodes
+`swap`/`splice`/`reverse`, dispatcher `function(v,q,x,X){var y=q^v;...}` qui
+référence cet objet, point d'appel réel via les champs `.s`/`.sp`) plutôt
+que sur les noms de variables minifiés du jour (`p`, `C8`, `P2` au moment de
+l'écriture) — ces noms changeront au prochain déploiement, la forme du code
+beaucoup moins vite. Testé et vérifié : cette extraction structurelle
+retrouve d'elle-même exactement les mêmes `p`/`C8`/`P2`/`(69, 2315)` que
+l'analyse manuelle, sur le fichier réellement téléchargé en direct (pas
+seulement sur une copie locale figée).
+
+### Le nouveau mur : le déchiffrement est correct, la requête média est quand même rejetée (403)
+
+Malgré une signature vérifiée correcte par deux méthodes indépendantes, la
+requête HTTP finale vers `googlevideo.com` avec cette signature renvoie
+**systématiquement `403`**, testé de façon répétée et honnête (pas
+abandonné à la première tentative) :
+- sur plusieurs vidéos différentes (dont une vidéo grand public sans aucune
+  restriction connue) ;
+- sur les deux `clientName` qui exposent un `signatureCipher` classique
+  (`WEB_REMIX`, `MWEB`) ;
+- avec et sans cookies de session (page d'accueil + page de la vidéo
+  chargées au préalable pour obtenir un cookie réel avant l'appel `/player`
+  et avant la requête média) ;
+- avec et sans les paramètres `n`/`sefc` d'origine.
+
+Pendant ce temps, au même instant, depuis la même IP, une URL obtenue via
+`yt-dlp` (qui a choisi de lui-même le client `VISIONOS` lors de ces tests)
+**fonctionne** (`206` + `Content-Type: audio/webm`) — ce qui exclut un
+problème d'environnement (IP bannie, réseau bloqué) et pointe vers quelque
+chose de spécifique aux profils `WEB_REMIX`/`MWEB` en ce moment précis.
+Cohérent avec `metrolist-analysis.md` : le catalogue de clients
+d'`innertubex` marque justement plusieurs profils `BROKEN`/`PROBE_ONLY`
+« parce que les réponses de ces profils ne contiennent plus que des
+métadonnées SABR sans URL directe exploitable, ou nécessitent une
+attestation native indisponible » — la cause précise ici (validation
+côté CDN propre à la requête média, indépendante de la signature ?
+empreinte de session/navigateur manquante ?) n'a pas pu être confirmée avec
+certitude dans le temps de cette session, mais le symptôme (signature
+correcte, requête quand même rejetée, alors qu'un autre profil client
+fonctionne) correspond à ce que Metrolist documente lui-même avoir constaté
+empiriquement.
+
+### Décision et état du code
+
+Le déchiffrement (`signatureCipher.ts`) est **conservé dans le dépôt mais
+non branché dans `playbackResolver.ts`** : il ajouterait une latence réelle
+(fetch de `base.js` + appel `/player`) pour un chemin qui, vérifié
+honnêtement, échoue systématiquement à l'étape suivante dans l'état actuel
+constaté. Il est gardé car (a) c'est un résultat réel et indépendamment
+vérifiable (le déchiffrement en lui-même, pas le mur suivant), (b) il
+devient immédiatement exploitable sans rien réécrire si ce blocage CDN se
+lève ou change de profil client (situation qui, d'après le rythme de
+correctifs documenté dans `metrolist-analysis.md` — plusieurs fois par
+semaine côté Metrolist/innertubex — change réellement dans le temps), et
+(c) l'abandonner sans trace aurait fait perdre ce travail à la prochaine
+session. **yt-dlp reste donc, à ce jour, la seule solution qui produit
+réellement un flux audio jouable de bout en bout, vérifié par un `HTTP
+200`/`206` + `audio/*` réel.** `playbackResolver.ts` n'est pas modifié.
+
 ## Prochaine étape (non faite)
 
-Déchiffrement de `signatureCipher` : au vu de l'investigation du
-2026-09-03 ci-dessus, la piste la plus réaliste n'est plus "extraire et
-réimplémenter un algorithme de permutation" (le pattern classique documenté
-publiquement pour ce cas ne s'applique visiblement plus au player web
-`WEB_REMIX` actuel) mais l'une de :
-- confirmer/infirmer l'hypothèse SABR/UMP en interceptant réellement le
-  trafic réseau d'un vrai navigateur (Playwright, comme le 2026-09-02) sur
-  la lecture d'un morceau, pour voir si une requête `signatureCipher`
-  classique existe encore ailleurs (ex. client `IOS_MUSIC`/`ANDROID_MUSIC`
-  plutôt que `WEB_REMIX`) ;
-- exécuter le `base.js` réel dans un bac à sable Node `vm` avec des stubs
-  navigateur minimaux, en acceptant le coût d'ingénierie (comparable à la
-  tentative BotGuard abandonnée) ;
-- réévaluer entièrement si le coût de yt-dlp (packaging Docker, subprocess)
-  devient réellement bloquant — dans l'état actuel il ne l'est pas
-  (§105.9, Docker déjà fonctionnel avec yt-dlp inclus).
+- Comprendre précisément la cause du `403` sur la requête média
+  `WEB_REMIX`/`MWEB` malgré une signature correcte (interception réseau
+  d'un vrai navigateur avec Playwright, comme le 2026-09-02, mais cette
+  fois sur la requête `googlevideo.com` elle-même plutôt que sur `/player`,
+  pour voir ce qu'un vrai navigateur envoie de plus).
+- Explorer d'autres profils client via `/player` directement (au-delà de
+  `WEB_REMIX`/`MWEB`/`ANDROID_MUSIC`/`IOS_MUSIC` déjà sondés) pour trouver
+  un profil qui expose un `signatureCipher` classique **et** dont la
+  requête média n'est pas rejetée — sans les constantes internes exactes de
+  clients natifs comme `VISIONOS` (que yt-dlp gère mais que ce rapport n'a
+  pas cherché à reproduire), ce qui reviendrait à redécouvrir leur
+  catalogue de contextes client par essais successifs.
+- Réévaluer si le coût de yt-dlp (packaging Docker, subprocess) devient
+  réellement bloquant — dans l'état actuel il ne l'est pas (§105.9, Docker
+  déjà fonctionnel avec yt-dlp inclus).
 Sous-projet à part entière, pas un correctif ponctuel.
