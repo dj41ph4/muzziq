@@ -35,8 +35,10 @@ import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.ui.AlbumUi
 import com.muzziq.mobile.ui.ArtistUi
 import com.muzziq.mobile.ui.common.EmptyState
+import com.muzziq.mobile.ui.common.HeroCard
 import com.muzziq.mobile.ui.common.MuzziQFilterChip
 import com.muzziq.mobile.ui.common.TrackRow
+import com.muzziq.mobile.ui.palette.rememberDominantColor
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
 private enum class LibraryView { TRACKS, ARTISTS, ALBUMS }
@@ -67,15 +69,31 @@ fun LibraryScreen(
 
     Box(Modifier.fillMaxSize().background(MuzziQColors.Bg)) {
         if (detailTitle != null) {
-            Column(Modifier.fillMaxSize().padding(contentPadding)) {
-                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { detailTitle = null; onCloseBrowseDetail() }) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Retour", tint = MuzziQColors.TextPrimary)
-                    }
-                    Text(detailTitle.orEmpty(), color = MuzziQColors.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
-                }
+            // Cover réelle du premier morceau si connue (standalone : vient du scan local ;
+            // mode Lié : toujours null aujourd'hui, voir AppViewModel.openArtist/openAlbum —
+            // limite déjà documentée, jamais une cover inventée). Le dégradé HeroCard retombe
+            // simplement sur MuzziQColors.Surface quand aucune couleur dominante n'est extraite.
+            val heroArtwork = browseTracks.firstOrNull()?.artworkUrl
+            val dominant = rememberDominantColor(heroArtwork)
+            Box(Modifier.fillMaxSize().padding(contentPadding)) {
                 LazyColumn {
+                    item {
+                        HeroCard(
+                            title = detailTitle.orEmpty(),
+                            subtitle = if (browseTracks.isNotEmpty()) "${browseTracks.size} morceau(x)" else null,
+                            artworkUrl = heroArtwork,
+                            dominant = dominant,
+                        )
+                    }
                     items(browseTracks, key = { it.id }) { track -> TrackRow(track) { onTrackClick(track) } }
+                }
+                IconButton(
+                    onClick = { detailTitle = null; onCloseBrowseDetail() },
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f), androidx.compose.foundation.shape.CircleShape),
+                ) {
+                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Retour", tint = MuzziQColors.TextPrimary)
                 }
             }
             return@Box

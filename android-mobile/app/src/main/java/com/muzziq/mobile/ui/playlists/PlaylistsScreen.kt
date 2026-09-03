@@ -40,7 +40,10 @@ import androidx.compose.ui.unit.sp
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.domain.MusicProviderId
 import com.muzziq.mobile.domain.PlaylistSummary
+import com.muzziq.mobile.ui.common.EmptyState
+import com.muzziq.mobile.ui.common.HeroCard
 import com.muzziq.mobile.ui.common.TrackRow
+import com.muzziq.mobile.ui.palette.rememberDominantColor
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
 /**
@@ -69,38 +72,29 @@ fun PlaylistsScreen(
     Box(Modifier.fillMaxSize().background(MuzziQColors.Bg)) {
         if (openPlaylistId != null) {
             val playlist = playlists.firstOrNull { it.id == openPlaylistId }
-            Column(Modifier.fillMaxSize().padding(contentPadding)) {
-                Row(
-                    Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onClosePlaylist) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Retour", tint = MuzziQColors.TextPrimary)
-                    }
-                    Column(Modifier.padding(start = 8.dp).weight(1f)) {
-                        Text(
-                            playlist?.name ?: "Playlist",
-                            color = MuzziQColors.TextPrimary,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        if (playlist?.provider == MusicProviderId.SPOTIFY) {
-                            SourceBadge(text = "Spotify")
+            // PlaylistSummary ne porte pas de cover propre (§66/§67, pas encore de champ
+            // artwork côté modèle) — on retombe honnêtement sur la cover du premier morceau
+            // plutôt que d'inventer une pochette de playlist qui n'existe pas.
+            val heroArtwork = playlistTracks.firstOrNull()?.artworkUrl
+            val dominant = rememberDominantColor(heroArtwork)
+            // Spotify (lecture seule) : jamais de bouton "Retirer" — aucune route
+            // d'écriture n'existe côté SpotifyProvider pour cette playlist (§58).
+            val removable = playlist?.provider != MusicProviderId.SPOTIFY
+            Box(Modifier.fillMaxSize().padding(contentPadding)) {
+                LazyColumn {
+                    item {
+                        HeroCard(
+                            title = playlist?.name ?: "Playlist",
+                            subtitle = if (playlistTracks.isNotEmpty()) "${playlistTracks.size} morceau(x)" else null,
+                            artworkUrl = heroArtwork,
+                            dominant = dominant,
+                        ) {
+                            if (playlist?.provider == MusicProviderId.SPOTIFY) SourceBadge(text = "Spotify")
                         }
                     }
-                }
-                if (playlistTracks.isEmpty()) {
-                    Text(
-                        "Playlist vide — ajoute des morceaux depuis la recherche ou la bibliothèque.",
-                        color = MuzziQColors.TextMuted,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
-                // Spotify (lecture seule) : jamais de bouton "Retirer" — aucune route
-                // d'écriture n'existe côté SpotifyProvider pour cette playlist (§58).
-                val removable = playlist?.provider != MusicProviderId.SPOTIFY
-                LazyColumn {
+                    if (playlistTracks.isEmpty()) {
+                        item { EmptyState("Playlist vide — ajoute des morceaux depuis la recherche ou la bibliothèque.") }
+                    }
                     items(playlistTracks, key = { it.id }) { track ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.weight(1f)) { TrackRow(track) { onTrackClick(track) } }
@@ -111,6 +105,14 @@ fun PlaylistsScreen(
                             }
                         }
                     }
+                }
+                IconButton(
+                    onClick = onClosePlaylist,
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.35f), CircleShape),
+                ) {
+                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Retour", tint = MuzziQColors.TextPrimary)
                 }
             }
         } else {

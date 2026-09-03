@@ -214,6 +214,8 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                                     MiniPlayer(
                                         track = track,
                                         isPlaying = isPlaying,
+                                        positionMs = positionMs,
+                                        durationMs = durationMs,
                                         animatedVisibilityScope = this@AnimatedVisibility,
                                         onTogglePlayPause = { vm.player.togglePlayPause(vm.musicSource) },
                                         onExpand = { expanded = true },

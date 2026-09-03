@@ -28,7 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
 /**
@@ -89,26 +90,45 @@ fun <T> HorizontalShelf(
     }
 }
 
-/** Cover carrée avec fallback icône note — utilisée par [SquareMediaCard]/[AlbumCard]. */
+/**
+ * Cover carrée/ronde avec état de chargement réel — utilisée par [SquareMediaCard]/
+ * [AlbumCard]/[ArtistCircleCard]/[QuickTile]/[HeroCard]. `null` d'entrée (pas encore de
+ * cover connue, ex. browse artiste/album côté serveur — voir AppViewModel.openArtist/
+ * openAlbum) retombe directement sur l'icône, jamais de requête réseau lancée pour rien.
+ * Une URL non nulle passe par [Skeleton] (§56) pendant le chargement Coil, puis l'icône de
+ * secours en cas d'échec réseau — remplace le AsyncImage muet d'avant qui laissait un
+ * espace vide sans retour visuel pendant le chargement.
+ */
 @Composable
 private fun MediaCover(
     artworkUrl: String?,
     size: androidx.compose.ui.unit.Dp,
     shape: androidx.compose.ui.graphics.Shape,
 ) {
-    if (artworkUrl != null) {
-        AsyncImage(
-            model = artworkUrl,
-            contentDescription = null,
-            modifier = Modifier.size(size).clip(shape),
-        )
-    } else {
+    if (artworkUrl == null) {
         Box(
             Modifier.size(size).clip(shape).background(MuzziQColors.Surface),
             contentAlignment = Alignment.Center,
         ) {
             Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MuzziQColors.TextFaint)
         }
+        return
+    }
+    SubcomposeAsyncImage(
+        model = artworkUrl,
+        contentDescription = null,
+        modifier = Modifier.size(size).clip(shape),
+        loading = { Skeleton(Modifier.size(size), shape) },
+        error = {
+            Box(
+                Modifier.size(size).background(MuzziQColors.Surface),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = MuzziQColors.TextFaint)
+            }
+        },
+    ) {
+        SubcomposeAsyncImageContent()
     }
 }
 
@@ -286,9 +306,12 @@ fun HeroCard(
     }
 }
 
-/** Placeholder animé pendant un chargement (§56 Skeleton) — pas encore branché à un vrai
- * état "loading" par écran (la plupart des données locales/Room arrivent quasi instantanément),
- * posé ici pour que les écrans suivants puissent l'utiliser sans redéfinir le shimmer. */
+/** Placeholder pendant un chargement (§56 Skeleton) — utilisé par [MediaCover] pendant le
+ * chargement réel d'une cover via Coil (SubcomposeAsyncImage.loading), donc par toute
+ * card du design system qui affiche une image (SquareMediaCard/AlbumCard/PlaylistCard/
+ * ArtistCircleCard/QuickTile/HeroCard). Pas d'animation shimmer en V1 (juste la couleur
+ * Surface plate) — suffisant vu la vitesse habituelle du cache Coil, une vraie animation
+ * resterait à ajouter si des chargements visiblement lents sont un jour observés. */
 @Composable
 fun Skeleton(modifier: Modifier = Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(8.dp)) {
     Box(modifier.clip(shape).background(MuzziQColors.Surface))

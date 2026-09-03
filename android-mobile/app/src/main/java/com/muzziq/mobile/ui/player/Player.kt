@@ -50,9 +50,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
+import com.muzziq.mobile.ui.common.Skeleton
 import com.muzziq.mobile.ui.palette.rememberDominantColor
 import com.muzziq.mobile.ui.theme.MuzziQColors
 import kotlinx.coroutines.delay
@@ -67,40 +69,67 @@ import kotlinx.coroutines.delay
 fun SharedTransitionScope.MiniPlayer(
     track: Track,
     isPlaying: Boolean,
+    positionMs: Long,
+    durationMs: Long,
     animatedVisibilityScope: androidx.compose.animation.AnimatedVisibilityScope,
     onTogglePlayPause: () -> Unit,
     onExpand: () -> Unit,
 ) {
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
-            .height(64.dp)
             .background(MuzziQColors.BgElevated)
-            .clickable(onClick = onExpand)
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clickable(onClick = onExpand),
     ) {
-        AsyncImage(
-            model = track.artworkUrl,
-            contentDescription = null,
-            modifier = Modifier
+        // Barre de progression fine (§56.1, façon Spotify) — mêmes positionMs/durationMs
+        // que le plein écran (PlayerController.tickPosition, déjà réel), jamais une valeur
+        // recalculée séparément ici.
+        if (durationMs > 0) {
+            LinearProgressIndicator(
+                progress = { (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().height(2.dp),
+                color = MuzziQColors.Brand,
+                trackColor = MuzziQColors.Surface,
+            )
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(62.dp)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val coverModifier = Modifier
                 .size(44.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .sharedElement(
                     rememberSharedContentState(key = "player-artwork"),
                     animatedVisibilityScope = animatedVisibilityScope,
-                ),
-        )
-        Column(Modifier.padding(start = 12.dp).weight(1f)) {
-            Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
-            Text(track.artist, color = MuzziQColors.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        IconButton(onClick = onTogglePlayPause) {
-            Icon(
-                if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                contentDescription = null,
-                tint = MuzziQColors.Brand,
-            )
+                )
+            if (track.artworkUrl == null) {
+                Skeleton(coverModifier, RoundedCornerShape(6.dp))
+            } else {
+                SubcomposeAsyncImage(
+                    model = track.artworkUrl,
+                    contentDescription = null,
+                    modifier = coverModifier,
+                    loading = { Skeleton(Modifier.size(44.dp), RoundedCornerShape(6.dp)) },
+                    error = { Skeleton(Modifier.size(44.dp), RoundedCornerShape(6.dp)) },
+                ) {
+                    SubcomposeAsyncImageContent()
+                }
+            }
+            Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+                Text(track.artist, color = MuzziQColors.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            IconButton(onClick = onTogglePlayPause) {
+                Icon(
+                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = null,
+                    tint = MuzziQColors.Brand,
+                )
+            }
         }
     }
 }
@@ -150,18 +179,27 @@ fun SharedTransitionScope.PlayerScreen(
             }
 
             Box(Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
-                AsyncImage(
-                    model = track.artworkUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth(0.82f)
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(16.dp))
-                        .sharedElement(
-                            rememberSharedContentState(key = "player-artwork"),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                        ),
-                )
+                val coverModifier = Modifier
+                    .fillMaxWidth(0.82f)
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .sharedElement(
+                        rememberSharedContentState(key = "player-artwork"),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                    )
+                if (track.artworkUrl == null) {
+                    Skeleton(coverModifier, RoundedCornerShape(16.dp))
+                } else {
+                    SubcomposeAsyncImage(
+                        model = track.artworkUrl,
+                        contentDescription = null,
+                        modifier = coverModifier,
+                        loading = { Skeleton(Modifier.fillMaxSize(), RoundedCornerShape(16.dp)) },
+                        error = { Skeleton(Modifier.fillMaxSize(), RoundedCornerShape(16.dp)) },
+                    ) {
+                        SubcomposeAsyncImageContent()
+                    }
+                }
             }
 
             Row(Modifier.padding(top = 32.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
