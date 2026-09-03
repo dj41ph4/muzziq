@@ -129,14 +129,98 @@ repli yt-dlp dans l'état actuel constaté. yt-dlp reste donc la seule
 solution qui fonctionne réellement de bout en bout pour obtenir un flux
 audio jouable.
 
+## 2026-09-03 — tentative réelle de déchiffrement `signatureCipher`, conclusion négative honnête
+
+Objectif : éliminer yt-dlp en déchiffrant `signatureCipher` côté serveur
+(Node), en étudiant la stratégie générale documentée publiquement par des
+extracteurs indépendants (yt-dlp — Unlicense, code consulté pour la
+*méthode* uniquement, jamais copié — et, pour l'architecture seulement,
+Metrolist — GPL-3.0, lu sans jamais copier de code, conformément à la
+§33 "RÈGLE METROLIST"). Aucun code de l'un ou l'autre n'a été traduit ou
+collé dans ce dépôt.
+
+**Étape 1 — récupération du vrai `base.js` courant.** Même méthode que
+`signatureTimestamp.ts` (HTML de `music.youtube.com/` → chemin
+`/s/player/.../base.js`) : `/s/player/9470c977/player_es6.vflset/nl_NL/base.js`,
+2 588 733 caractères, récupéré réellement le 2026-09-03.
+
+**Étape 2 — recherche du pattern classique documenté publiquement (yt-dlp,
+ytdl-core, NewPipeExtractor) : une fonction courte de la forme
+`function(a){a=a.split("");OBJ.xx(a,N);...;return a.join("")}` qui
+enchaîne 3-4 permutations (swap, reverse, slice).** Recherche exhaustive par
+regex sur l'intégralité du fichier : **aucune occurrence.** `split("")`
+n'apparaît que 9 fois dans tout le fichier, aucune dans un contexte de
+déchiffrement de signature (utilitaires `Array.prototype` génériques,
+fonctions d'encodage `application/x-www-form-urlencoded`, génération d'ID
+Redux). `"&sig="`, `.get("s")`, `"sp"`, `decodeURIComponent(c...)` : zéro
+occurrence.
+
+**Étape 3 — hypothèse d'une obfuscation par table de chaînes indexée
+(property renaming Closure via tableau `p[N]`), évoquée le 2026-09-02 :
+vérifiée et écartée.** Une chaîne `var p="indexOf;length;...;signatureCipher;
+...;slice;...;splice;..."` existe bien en tête de fichier, mais son seul
+usage retrouvé (`redirector.googlevideo.com`, `.a1.googlevideo.com$`,
+`rr?[1-9].*\.c\.youtube\.com$`) est une liste de motifs de validation de
+noms d'hôte pour les serveurs `googlevideo.com`, sans rapport avec le
+déchiffrement de signature. Fausse piste écartée par lecture directe du
+contexte d'usage, pas par supposition.
+
+**Étape 4 — recherche directe des points d'usage de `adaptiveFormats`/
+`signatureCipher` dans le pipeline de lecture réel.** `signatureCipher`
+n'apparaît que 2 fois dans tout le fichier (aucune n'est un déchiffrement —
+l'une remet le champ à `""` pour un cas DASH live, l'autre est un nom de
+classe de streaming sans rapport). En remontant le pipeline
+`adaptiveFormats` (10 occurrences), le code qui consomme les formats
+vérifie directement `l.url` (`if(!l||!l.url){...}`) et référence
+`sabrContextUpdates`, `botguardData` — signes que le player web actuel
+s'appuie en pratique sur SABR/UMP (Server-Allocated-Bandwidth-Routing,
+protocole serveur récent de YouTube pour la diffusion adaptative) plutôt
+que sur le schéma classique "une URL par format, signée côté client" pour
+lequel le déchiffrement `signatureCipher` a été historiquement documenté.
+Piste non confirmée à 100 % (l'exploration du binaire WASM associé
+[`AES128CTRCipher_*`, visiblement lié à ce protocole] sort du périmètre
+raisonnable de cette session) mais cohérente avec l'absence totale du
+pattern classique : ce n'est pas un algorithme simplement plus obfusqué,
+c'est vraisemblablement une architecture de livraison différente de celle
+pour laquelle la technique de déchiffrement générique a été conçue.
+
+**Conclusion honnête :** la tentative de déchiffrement `signatureCipher`
+côté serveur MuzziQ est réelle, documentée, mais **négative** dans le temps
+raisonnable de cette session. Ce n'est pas un abandon par manque d'effort :
+quatre pistes concrètes ont été vérifiées par lecture directe du vrai
+`base.js` (pattern classique, table de chaînes, points d'usage réels du
+pipeline de formats) et aucune n'a abouti à une fonction de déchiffrement
+exploitable en un temps raisonnable. Exécuter le `base.js` réel dans un
+bac à sable JS (Node `vm`) resterait théoriquement possible mais impliquerait
+de reconstituer un environnement navigateur suffisant (`window`, `document`,
+`WebAssembly`, timers, etc.) pour que ce fichier de 2,5 Mo s'initialise sans
+planter — un effort du même ordre que celui déjà tenté et abandonné pour
+PoToken/BotGuard via jsdom (voir 2026-09-02 ci-dessus), pour un résultat
+non garanti si l'hypothèse SABR/UMP se confirme (dans ce cas il n'y aurait
+tout simplement plus d'URL signée unique à déchiffrer par ce mécanisme).
+
+**yt-dlp reste donc la seule solution qui fonctionne réellement de bout en
+bout** pour obtenir un flux audio jouable. `playbackResolver.ts` n'est pas
+modifié : `tryInnertube()` reste tenté en premier (ne coûte rien, redevient
+utile si YouTube sert un jour une URL en clair) et retombe systématiquement
+sur `ytDlpResolver.ts`.
+
 ## Prochaine étape (non faite)
 
-Déchiffrement de `signatureCipher` (et probablement le paramètre `n` de
-limitation de débit, non exploré ici puisque le blocage se situe avant) :
-nécessiterait soit une réimplémentation continuellement mise à jour de
-l'algorithme de désobfuscation de `base.js` (coût de maintenance récurrent,
-déconseillé par §87.4), soit l'exécution partielle du `base.js` réel dans un
-bac à sable JS pour en extraire la fonction de déchiffrement dynamiquement.
-Les deux options restent un sous-projet à part entière, pas un correctif —
-à réévaluer si le coût de yt-dlp (packaging Docker, subprocess) devient
-bloquant.
+Déchiffrement de `signatureCipher` : au vu de l'investigation du
+2026-09-03 ci-dessus, la piste la plus réaliste n'est plus "extraire et
+réimplémenter un algorithme de permutation" (le pattern classique documenté
+publiquement pour ce cas ne s'applique visiblement plus au player web
+`WEB_REMIX` actuel) mais l'une de :
+- confirmer/infirmer l'hypothèse SABR/UMP en interceptant réellement le
+  trafic réseau d'un vrai navigateur (Playwright, comme le 2026-09-02) sur
+  la lecture d'un morceau, pour voir si une requête `signatureCipher`
+  classique existe encore ailleurs (ex. client `IOS_MUSIC`/`ANDROID_MUSIC`
+  plutôt que `WEB_REMIX`) ;
+- exécuter le `base.js` réel dans un bac à sable Node `vm` avec des stubs
+  navigateur minimaux, en acceptant le coût d'ingénierie (comparable à la
+  tentative BotGuard abandonnée) ;
+- réévaluer entièrement si le coût de yt-dlp (packaging Docker, subprocess)
+  devient réellement bloquant — dans l'état actuel il ne l'est pas
+  (§105.9, Docker déjà fonctionnel avec yt-dlp inclus).
+Sous-projet à part entière, pas un correctif ponctuel.
