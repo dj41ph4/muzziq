@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
@@ -27,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +34,8 @@ import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.ui.AlbumUi
 import com.muzziq.mobile.ui.ArtistUi
+import com.muzziq.mobile.ui.common.EmptyState
+import com.muzziq.mobile.ui.common.MuzziQFilterChip
 import com.muzziq.mobile.ui.common.TrackRow
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
@@ -95,23 +96,19 @@ fun LibraryScreen(
                 }
             }
             item {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LibraryView.entries.forEach { v ->
-                        val selected = v == view
-                        Text(
-                            when (v) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(LibraryView.entries.toList()) { v ->
+                        MuzziQFilterChip(
+                            label = when (v) {
                                 LibraryView.TRACKS -> "Titres"
                                 LibraryView.ARTISTS -> "Artistes"
                                 LibraryView.ALBUMS -> "Albums"
                             },
-                            color = if (selected) MuzziQColors.Brand else MuzziQColors.TextMuted,
-                            fontSize = 13.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(if (selected) MuzziQColors.Surface else MuzziQColors.Bg)
-                                .clickable { view = v }
-                                .padding(horizontal = 14.dp, vertical = 6.dp),
+                            selected = v == view,
+                            onClick = { view = v },
                         )
                     }
                 }
@@ -157,11 +154,8 @@ fun LibraryScreen(
 
 @Composable
 private fun EmptyBrowseNotice(mode: AppMode) {
-    Text(
+    EmptyState(
         if (mode == AppMode.STANDALONE) "Aucun morceau scanné pour l'instant."
         else "Bibliothèque serveur vide, ou pas encore chargée.",
-        color = MuzziQColors.TextMuted,
-        fontSize = 13.sp,
-        modifier = Modifier.padding(16.dp),
     )
 }

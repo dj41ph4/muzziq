@@ -245,7 +245,15 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                     },
                 ) { padding ->
                     when (Tab.entries[tab]) {
-                        Tab.HOME -> HomeScreen(s.mode, library, homeRows, padding) { vm.playFrom(library, it) }
+                        Tab.HOME -> HomeScreen(
+                            mode = s.mode,
+                            tracks = library,
+                            homeRows = homeRows,
+                            contentPadding = padding,
+                            playlists = playlists,
+                            onTrackClick = { vm.playFrom(library, it) },
+                            onOpenPlaylist = { playlistId -> vm.openPlaylist(playlistId); tab = Tab.PLAYLISTS.ordinal },
+                        )
                         Tab.SEARCH -> SearchScreen(s.mode, query, { query = it; vm.search(it) }, searchResults, padding) { vm.playFrom(searchResults, it) }
                         Tab.LIBRARY -> LibraryScreen(
                             mode = s.mode,
