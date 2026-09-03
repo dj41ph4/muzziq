@@ -97,7 +97,7 @@ fun PlaylistsScreen(
                     }
                     items(playlistTracks, key = { it.id }) { track ->
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.weight(1f)) { TrackRow(track) { onTrackClick(track) } }
+                            Box(Modifier.weight(1f)) { TrackRow(track, onClick = { onTrackClick(track) }) }
                             if (removable) {
                                 IconButton(onClick = { onRemoveTrack(openPlaylistId, track.id) }) {
                                     Icon(Icons.Rounded.Delete, contentDescription = "Retirer", tint = MuzziQColors.TextFaint)
