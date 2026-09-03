@@ -82,7 +82,7 @@ fun SearchScreen(
                 SectionTitle("Résultats")
                 LazyColumn {
                     items(results, key = { it.id }) { track ->
-                        TrackRow(track) { onTrackClick(track) }
+                        TrackRow(track, onClick = { onTrackClick(track) })
                     }
                 }
             }

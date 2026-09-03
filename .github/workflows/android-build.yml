@@ -51,12 +51,17 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Installation de la plateforme et des build-tools
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+        # Android 17 (API 37) publie ses plateformes SDK sous un id versionne
+        # "android-37.0" (pas juste "android-37") -> confirme via
+        # `sdkmanager --list` sur le runner. Necessite AGP >= 9.1 (voir agp
+        # dans libs.versions.toml) qui sait resoudre ce format ; AGP 9.1
+        # exige aussi build-tools >= 36.0.0.
+        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
 
       - name: Configuration de Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.9"
+          gradle-version: "9.7.1"
 
       # Seule vraie vérification disponible pour le code de domaine (ProviderRegistry,
       # etc.) : aucun SDK/émulateur Android dans l'environnement de développement de ce

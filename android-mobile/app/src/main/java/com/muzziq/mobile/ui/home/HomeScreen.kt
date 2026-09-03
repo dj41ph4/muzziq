@@ -113,7 +113,7 @@ fun HomeScreen(
             } else {
                 item { SectionTitle("Ta bibliothèque") }
                 lazyColumnItems(tracks, key = { it.id }) { track ->
-                    TrackRow(track) { onTrackClick(track) }
+                    TrackRow(track, onClick = { onTrackClick(track) })
                 }
             }
         }

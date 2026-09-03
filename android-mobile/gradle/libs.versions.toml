@@ -1,6 +1,6 @@
 [versions]
-agp = "8.7.2"
-kotlin = "2.0.21"
+agp = "9.4.0"
+kotlin = "2.4.10"
 coreKtx = "1.15.0"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
@@ -17,7 +17,7 @@ coroutines = "1.9.0"
 guava = "33.3.1-android"
 splashscreen = "1.0.1"
 palette = "1.0.0"
-room = "2.6.1"
+room = "2.8.4"
 browser = "1.8.0"
 
 [libraries]
@@ -70,7 +70,16 @@ kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
 
 [plugins]
+# Pas de plugin org.jetbrains.kotlin.android : AGP 9 compile Kotlin lui-meme
+# (built-in Kotlin) et refuse qu'on applique le plugin Kotlin Android en plus
+# ("Cannot add extension with name 'kotlin'").
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+# Declare — sans l'appliquer, cf. build.gradle.kts racine — la version de KGP
+# que le Kotlin integre d'AGP doit utiliser : AGP 9.4 embarque encore KGP
+# 2.2.10, incapable de lire les metadonnees Kotlin 2.4 d'innertubex-android
+# 0.4.1 (qui depend de kotlin-stdlib 2.4.10).
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-ksp = { id = "com.google.devtools.ksp", version = "2.0.21-1.0.28" }
+# KSP 2.3.x (KSP2) : premiere serie compatible AGP 9 + built-in Kotlin, et
+# desormais decouplee de la version du compilateur Kotlin.
+ksp = { id = "com.google.devtools.ksp", version = "2.3.11" }

@@ -151,7 +151,7 @@ class LocalTasteDatabase(context: Context) :
                         score = score + excluded.score,
                         evidence_count = evidence_count + 1
                     """.trimIndent(),
-                    arrayOf(artist, if (completed) 2.0 else 1.0),
+                    arrayOf<Any>(artist, if (completed) 2.0 else 1.0),
                 )
             }
             db.setTransactionSuccessful()

@@ -86,7 +86,7 @@ fun LibraryScreen(
                             dominant = dominant,
                         )
                     }
-                    items(browseTracks, key = { it.id }) { track -> TrackRow(track) { onTrackClick(track) } }
+                    items(browseTracks, key = { it.id }) { track -> TrackRow(track, onClick = { onTrackClick(track) }) }
                 }
                 IconButton(
                     onClick = { detailTitle = null; onCloseBrowseDetail() },
@@ -133,7 +133,7 @@ fun LibraryScreen(
                 }
             }
             when (view) {
-                LibraryView.TRACKS -> items(tracks, key = { it.id }) { track -> TrackRow(track) { onTrackClick(track) } }
+                LibraryView.TRACKS -> items(tracks, key = { it.id }) { track -> TrackRow(track, onClick = { onTrackClick(track) }) }
                 LibraryView.ARTISTS -> {
                     if (artists.isEmpty()) item { EmptyBrowseNotice(mode) }
                     // Grille 2 colonnes non-lazy (même pattern que les raccourcis Home,
