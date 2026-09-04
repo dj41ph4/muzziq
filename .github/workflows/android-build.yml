@@ -120,6 +120,8 @@ jobs:
         # ./gradlew : ce dépôt ne committe pas de wrapper binaire
         # (gradle-wrapper.jar) — même choix que Movviz (android-mobile-build.yml).
         working-directory: android-mobile
+        env:
+          MUZZIQ_SPOTIFY_CLIENT_ID: ${{ secrets.MUZZIQ_SPOTIFY_CLIENT_ID }}
         run: |
           gradle assembleRelease --no-daemon \
             ${{ steps.ver.outputs.name != '' && format('-PmuzziqVersionName={0} -PmuzziqVersionCode={1}', steps.ver.outputs.name, steps.ver.outputs.code) || '' }}

@@ -90,13 +90,14 @@ interface SpotifyWebApi {
     suspend fun myPlaylists(
         @Header("Authorization") bearer: String,
         @Query("limit") limit: Int = 50,
+        @Query("offset") offset: Int = 0,
     ): Response<SpotifyPlaylistsResponse>
 
     @GET("v1/playlists/{id}/items")
     suspend fun playlistItems(
         @Path("id") id: String,
         @Header("Authorization") bearer: String,
-        @Query("limit") limit: Int = 100,
+        @Query("limit") limit: Int = 50,
         @Query("offset") offset: Int = 0,
     ): Response<SpotifyPlaylistItemsResponse>
 

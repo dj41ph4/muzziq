@@ -173,7 +173,7 @@ private fun SpotifyAccountCard(account: SpotifyAccountUiState, busy: Boolean, er
             if (connected != null) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MuzziQColors.Brand)
         }
         if (account is SpotifyAccountUiState.NotConfigured) {
-            Text("Ajoute un Client ID Spotify dans spotify.properties puis reconstruis l'app. MuzziQ synchronisera les titres likés et les playlists par métadonnées, sans télécharger les flux Spotify.", color = MuzziQColors.TextMuted, fontSize = 12.sp, lineHeight = 17.sp)
+            Text("Le connecteur Spotify n'est pas inclus dans cette build. Une build officielle configurée permettra une connexion en un clic et la synchronisation des titres likés, sans télécharger les flux Spotify.", color = MuzziQColors.TextMuted, fontSize = 12.sp, lineHeight = 17.sp)
         } else if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = MuzziQColors.Brand, strokeWidth = 2.dp)
         else Button(onClick = if (account is SpotifyAccountUiState.Connected) onDisconnect else onConnect, modifier = Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.SurfaceRaised, contentColor = MuzziQColors.TextPrimary)) { Text(if (account is SpotifyAccountUiState.Connected) "Déconnecter" else "Connecter", fontWeight = FontWeight.SemiBold) }
         if (account is SpotifyAccountUiState.Connected && !busy) {

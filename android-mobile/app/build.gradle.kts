@@ -12,17 +12,18 @@ plugins {
 val resolvedVersionName = (project.findProperty("muzziqVersionName") as String?)?.takeIf { it.isNotBlank() } ?: "0.1.0-dev"
 val resolvedVersionCode = (project.findProperty("muzziqVersionCode") as String?)?.toIntOrNull() ?: 1
 
-// Client ID Spotify (Authorization Code + PKCE, jamais de client_secret dans l'APK —
-// PKCE n'en a structurellement pas besoin) : chaque utilisateur enregistre sa propre
-// app sur developer.spotify.com (MuzziQ est self-hosted/perso, pas d'app Spotify
-// partagée publiée) et colle son Client ID dans un fichier local non versionné, même
-// mécanisme que keystore.properties ci-dessous. Vide par défaut : la capacité Spotify
-// se déclare simplement absente (voir SpotifyAuthManager) plutôt que de planter.
+// Client ID Spotify public (Authorization Code + PKCE, jamais de client_secret dans
+// l'APK — PKCE n'en a structurellement pas besoin). Il est injecté par la CI depuis
+// MUZZIQ_SPOTIFY_CLIENT_ID : l'utilisateur final n'a rien à copier dans un fichier
+// de propriétés, il appuie simplement sur "Connecter" dans Réglages.
 val spotifyClientId = run {
     val props = Properties()
     val propsFile = rootProject.file("spotify.properties")
     if (propsFile.exists()) propsFile.inputStream().use { props.load(it) }
-    props.getProperty("clientId") ?: ""
+    System.getenv("MUZZIQ_SPOTIFY_CLIENT_ID")
+        ?: (project.findProperty("muzziqSpotifyClientId") as String?)
+        ?: props.getProperty("clientId")
+        ?: ""
 }
 
 android {

@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { useState } from "react";
 import Link from "next/link";
 import { Music2, Heart, Search, Download, Sparkles } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -68,8 +69,10 @@ function RowSkeleton() {
 export default function HomePage() {
   const { data } = useSWR<{ rows: HomeRow[] }>("/api/home", fetcher);
   const { play } = usePlayer();
-  const featured = data?.rows.find((row) => row.recordings.length > 0)?.recordings[0];
-  const featuredRow = data?.rows.find((row) => row.recordings.some((recording) => recording.id === featured?.id));
+  const [filter, setFilter] = useState<"all" | "for-you" | "trending" | "new-releases">("all");
+  const visibleRows = data?.rows.filter((row) => filter === "all" || row.id === filter);
+  const featured = visibleRows?.find((row) => row.recordings.length > 0)?.recordings[0];
+  const featuredRow = visibleRows?.find((row) => row.recordings.some((recording) => recording.id === featured?.id));
 
   async function resolveOne(r: Recording): Promise<PlayableTrack | null> {
     const res = await fetch(`/api/recordings/${r.id}/resolve`);
@@ -115,6 +118,19 @@ export default function HomePage() {
           ))}
       </div>
 
+      <nav className="float-in flex gap-2 overflow-x-auto pb-1" aria-label="Filtres de l'accueil" style={{ scrollbarWidth: "none" }}>
+        {([
+          ["all", "Tout"],
+          ["for-you", "Pour toi"],
+          ["trending", "Hits du moment"],
+          ["new-releases", "Nouveautés"],
+        ] as const).map(([value, label]) => (
+          <button key={value} type="button" onClick={() => setFilter(value)} className={`flex-shrink-0 rounded-full px-4 py-2 text-xs font-bold transition-colors ${filter === value ? "bg-[var(--brand)] text-black" : "glass text-[var(--ink-soft)] hover:text-[var(--ink)]"}`}>
+            {label}
+          </button>
+        ))}
+      </nav>
+
       {featured && featuredRow && (
         <button
           type="button"
@@ -142,7 +158,15 @@ export default function HomePage() {
         </div>
       )}
 
-      {data?.rows.map((row, i) => (
+      {data && data.rows.length > 0 && visibleRows?.length === 0 && (
+        <div className="glass float-in flex flex-col items-center gap-3 rounded-2xl px-8 py-12 text-center">
+          <Music2 size={28} className="text-[var(--ink-dim)]" />
+          <p className="text-sm text-[var(--ink-soft)]">Cette sélection n'est pas encore disponible.</p>
+          <button type="button" onClick={() => setFilter("all")} className="text-xs font-bold text-[var(--brand)]">Afficher tout</button>
+        </div>
+      )}
+
+      {visibleRows?.map((row, i) => (
         <section key={row.id} className="float-in" style={{ animationDelay: `${i * 60}ms` }}>
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>

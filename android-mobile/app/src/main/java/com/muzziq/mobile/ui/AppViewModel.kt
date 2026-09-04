@@ -53,6 +53,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 sealed interface RootUiState {
@@ -102,10 +105,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _library = MutableStateFlow<List<Track>>(emptyList())
     val library: StateFlow<List<Track>> = _library.asStateFlow()
 
-    /** Rangées Home (§46) — GET /api/home, mode Lié uniquement (moteur de recommandation
-     * déterministe serveur, aucun équivalent standalone aujourd'hui). Vide en standalone
-     * ou si le serveur n'a encore aucune rangée à proposer — HomeScreen retombe alors sur
-     * la liste "Bibliothèque" à plat, jamais un carrousel vide affiché pour faire joli. */
+    /** Rangées Home (§46) — moteur serveur en mode Lié, moteur catalogue local +
+     * YouTube Music direct en standalone. Dans les deux cas, l'écran d'accueil
+     * reste une surface de découverte, jamais un miroir de la bibliothèque. */
     private val _homeRows = MutableStateFlow<List<HomeRowUi>>(emptyList())
     val homeRows: StateFlow<List<HomeRowUi>> = _homeRows.asStateFlow()
 
@@ -682,6 +684,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refreshPlaylists()
         refreshHistory()
         refreshArtistsAlbums()
+        refreshStandaloneHomeRows()
         restorePersistedQueue()
     }
 
@@ -718,9 +721,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         restorePersistedQueue()
     }
 
-    /** GET /api/home (moteur de recommandation déterministe, déjà réel côté serveur —
+    /** Accueil standalone : les candidats sont de vraies recherches YouTube Music,
+     * puis les recherches d'artistes appréciés viennent du profil d'écoute local.
+     * Aucun titre n'est inventé et l'échec réseau laisse les autres étagères intactes. */
+    private fun refreshStandaloneHomeRows() {
+        viewModelScope.launch {
+            val year = java.time.Year.now().value
+            val affinityArtists = standalone.topAffinityArtists().take(3)
+            val queries = listOf("Top hits $year", "Nouveautés musique $year") + affinityArtists
+            val results = coroutineScope { queries.map { query -> async { standalone.search(query).getOrDefault(emptyList()) } }.awaitAll() }
+            val rows = mutableListOf<HomeRowUi>()
+            val trending = results.getOrNull(0).orEmpty().filter { it.source is TrackSource.YouTube }.distinctBy { it.id }.take(12)
+            val newReleases = results.getOrNull(1).orEmpty().filter { it.source is TrackSource.YouTube }.distinctBy { it.id }.take(12)
+            if (trending.isNotEmpty()) rows += HomeRowUi("trending", "Hits du moment", trending)
+            if (newReleases.isNotEmpty()) rows += HomeRowUi("new-releases", "Nouveautés à découvrir", newReleases)
+            affinityArtists.forEachIndexed { index, artist ->
+                val tracks = results.getOrNull(index + 2).orEmpty().filter { it.source is TrackSource.YouTube }.distinctBy { it.id }.take(12)
+                if (tracks.isNotEmpty()) rows += HomeRowUi("artist-$index", "Parce que tu écoutes $artist", tracks)
+            }
+            _homeRows.value = rows
+        }
+    }
+
+    /** GET /api/home (moteur de recommandation déterministe réel côté serveur —
      * src/lib/recommendations/deterministicEngine.ts). Échec réseau ⇒ rangées vides,
-     * HomeScreen retombe sur la bibliothèque à plat, jamais une erreur bloquante. */
+     * HomeScreen affiche un état de découverte honnête. */
     private fun refreshHomeRows(url: String) {
         viewModelScope.launch {
             val api = ApiClientFactory.create(url)

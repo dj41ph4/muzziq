@@ -13,12 +13,9 @@ import java.security.SecureRandom
  * ce module : c'est structurellement inutile avec PKCE, pas juste "pas encore
  * ajouté".
  *
- * Client ID : chaque utilisateur enregistre sa propre app sur
- * developer.spotify.com et le colle dans `android-mobile/spotify.properties`
- * (non versionné, voir app/build.gradle.kts) → `BuildConfig.SPOTIFY_CLIENT_ID`.
- * MuzziQ est self-hosted/perso, pas d'app Spotify partagée publiée pour tous
- * les utilisateurs — cohérent avec le reste du dépôt (chacun pointe vers son
- * propre serveur MuzziQ).
+ * Client ID : public et injecté à la construction de l'APK par la CI dans
+ * `BuildConfig.SPOTIFY_CLIENT_ID`. L'utilisateur final n'a aucune propriété à
+ * renseigner : le bouton Réglages lance directement Spotify.
  *
  * Statut réel Spotify "Development Mode" (vérifié sur developer.spotify.com,
  * 2026-09) : une app non étendue au mode production reste limitée à 25
@@ -40,8 +37,7 @@ import java.security.SecureRandom
 class SpotifyAuthManager(
     private val credentialStore: SpotifyCredentialStore,
 ) {
-    /** Fausse si aucun Client ID n'a été configuré (spotify.properties absent/vide) —
-     * capacité absente, jamais un bouton "Connecter Spotify" qui échouerait en silence. */
+    /** Fausse si l'APK n'a pas été construit avec le connecteur Spotify. */
     fun isConfigured(): Boolean = BuildConfig.SPOTIFY_CLIENT_ID.isNotBlank()
 
     /** Génère un `code_verifier` PKCE (43-128 caractères, RFC 7636 §4.1) — aléatoire

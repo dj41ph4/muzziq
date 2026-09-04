@@ -75,9 +75,16 @@ class SpotifyProvider(
     /** "Bibliothèque" Spotify = morceaux mis en Favoris ("Titres likés"). */
     override suspend fun library(): Result<List<Track>> = withBearer { bearer ->
         runCatching {
-            val res = SpotifyApiClientFactory.web.savedLibrary(bearer)
-            if (!res.isSuccessful) error("Bibliothèque Spotify indisponible (${res.code()})")
-            res.body()?.items.orEmpty().mapNotNull { it.item?.toTrack() }
+            val tracks = mutableListOf<Track>()
+            var offset = 0
+            do {
+                val res = SpotifyApiClientFactory.web.savedLibrary(bearer, limit = 50, offset = offset)
+                if (!res.isSuccessful) error("Bibliothèque Spotify indisponible (${res.code()})")
+                val page = res.body()?.items.orEmpty().mapNotNull { it.item?.toTrack() }
+                tracks += page
+                offset += page.size
+            } while (page.size == 50)
+            tracks
         }
     }
 
@@ -114,17 +121,31 @@ class SpotifyProvider(
      * (PlaylistsScreen) les affiche distinctement avec un badge de provenance. */
     override suspend fun playlists(): Result<List<PlaylistSummary>> = withBearer { bearer ->
         runCatching {
-            val res = SpotifyApiClientFactory.web.myPlaylists(bearer)
-            if (!res.isSuccessful) error("Playlists Spotify indisponibles (${res.code()})")
-            res.body()?.items.orEmpty().map { PlaylistSummary(it.id, it.name, it.items?.total ?: it.tracks.total, MusicProviderId.SPOTIFY) }
+            val playlists = mutableListOf<PlaylistSummary>()
+            var offset = 0
+            do {
+                val res = SpotifyApiClientFactory.web.myPlaylists(bearer, limit = 50, offset = offset)
+                if (!res.isSuccessful) error("Playlists Spotify indisponibles (${res.code()})")
+                val page = res.body()?.items.orEmpty().map { PlaylistSummary(it.id, it.name, it.items?.total ?: it.tracks.total, MusicProviderId.SPOTIFY) }
+                playlists += page
+                offset += page.size
+            } while (page.size == 50)
+            playlists
         }
     }
 
     override suspend fun playlistTracks(playlistId: String): Result<List<Track>> = withBearer { bearer ->
         runCatching {
-            val res = SpotifyApiClientFactory.web.playlistItems(playlistId, bearer)
-            if (!res.isSuccessful) error("Contenu de playlist Spotify indisponible (${res.code()})")
-            res.body()?.items.orEmpty().mapNotNull { (it.item ?: it.track)?.toTrack() }
+            val tracks = mutableListOf<Track>()
+            var offset = 0
+            do {
+                val res = SpotifyApiClientFactory.web.playlistItems(playlistId, bearer, limit = 50, offset = offset)
+                if (!res.isSuccessful) error("Contenu de playlist Spotify indisponible (${res.code()})")
+                val page = res.body()?.items.orEmpty().mapNotNull { (it.item ?: it.track)?.toTrack() }
+                tracks += page
+                offset += page.size
+            } while (page.size == 50)
+            tracks
         }
     }
 
