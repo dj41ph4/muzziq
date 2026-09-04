@@ -5,7 +5,18 @@ serveur). Ce document résume ce que ça implique concrètement pour
 `android-mobile/`, pour qu'aucune future session ne suppose une autonomie qui
 n'existe pas.
 
-## Ce qui bloque, en une phrase
+## État actuel
+
+Le streaming YouTube Music autonome fonctionne désormais dans le client
+Android via `innertubex` : recherche filtrée sur les morceaux, résolution du
+flux audio, conservation des en-têtes signés et lecture Media3 par plages
+bornées de 512 KiB. Le chemin a été vérifié sur l'émulateur avec un morceau
+réel au-delà de l'ancien seuil de 512 KiB, puis après reprise de lecture.
+
+Le serveur reste compatible et constitue toujours le chemin du mode Lié ; il
+n'est simplement plus nécessaire pour le mode Standalone.
+
+## Historique du blocage initial
 
 Le serveur MuzziQ n'a **pas résolu** le déchiffrement de `signatureCipher`
 YouTube (obfuscation propre à chaque déploiement de `base.js`, surface de
@@ -18,24 +29,22 @@ aucune URL en clair. Le serveur retombe donc systématiquement sur `yt-dlp`
 
 `yt-dlp` ne tourne pas sur Android (pas de runtime Python embarqué, pas prévu
 d'en ajouter un — ce serait un chantier à part entière, pas un correctif).
-Donc :
+Cette analyse décrivait l'état avant l'intégration du moteur d'extraction
+Android. Elle reste utile comme contexte historique, mais ses conséquences
+ne décrivent plus le comportement actuel. Aujourd'hui :
 
-- **Le client Android ne peut pas, aujourd'hui, résoudre un flux YouTube Music
-  jouable sans un serveur MuzziQ qui fait le travail à sa place** (lequel
-  s'appuie lui-même sur yt-dlp). Ce n'est pas une limite d'implémentation
-  Android — c'est le même mur que le serveur a rencontré, hérité tel quel.
-- Écrire un module `InnerTubeClient`/`CipherResolver` côté Kotlin sans
-  résoudre ce problème produirait un client qui répond `UNPLAYABLE` sur
-  100% des morceaux réels — un bouton Play mort déguisé en fonctionnalité,
-  explicitement interdit. Personne n'a donc commencé ce module ici.
+- `StandaloneStreamExtractor` délègue la rotation des signatures et des
+  profils clients à `innertubex`, puis transmet l'URL et les métadonnées au
+  DataSource Media3.
+- `StreamHeaderDataSource` réinjecte les en-têtes du flux actif à chaque
+  ouverture et impose des plages bornées pour éviter les 403 après le premier
+  segment.
 - Mode Lié (`ServerMusicSource`) : fonctionne, parce qu'il délègue la
   résolution au serveur via `/api/recordings/{id}/resolve` puis
   `/api/play/{trackId}` — le serveur absorbe le problème avec yt-dlp,
   Android n'a jamais besoin de connaître InnerTube.
-- Mode Standalone (`StandaloneMusicSource`) : n'essaie pas de streamer
-  YouTube Music du tout — `STREAMING_UNAVAILABLE_NOTICE` l'annonce
-  explicitement dans l'UI recherche plutôt que de laisser un bouton Play
-  échouer silencieusement.
+- Mode Standalone (`StandaloneMusicSource`) : recherche et lecture YouTube
+  Music directes, avec repli de profil et nouvelle résolution après rejet CDN.
 
 ## Ce qui EST réellement autonome sur le téléphone dès aujourd'hui
 
@@ -51,11 +60,9 @@ Sans dépendre de ce blocage, ni d'aucun serveur :
 - File d'attente / Suivant-Précédent (`PlaybackService.playQueue` /
   `skipNext` / `skipPrevious`)
 
-C'est le périmètre réel de l'"autonomous-first" atteignable aujourd'hui —
-tout le reste (catalogue en ligne, streaming YouTube Music sans serveur)
-reste bloqué en amont, pas par manque de travail côté Android.
+C'est le périmètre réel de l'"autonomous-first" atteint aujourd'hui.
 
-## Prochaine étape possible (non commencée)
+## Pistes historiques désormais secondaires
 
 Identique à la note du README serveur : soit une réimplémentation
 continuellement maintenue du désobfuscateur de `base.js` (coût récurrent
@@ -64,7 +71,7 @@ sable JS pour en extraire la fonction de déchiffrement dynamiquement. Les
 deux restent des sous-projets à part entière, à réévaluer plus tard — pas
 un correctif Android à faire "vite fait" pour cocher une case du plan.
 
-## Spike "streaming direct Android" (2026-09-02) — blocage reconfirmé, rien codé
+## Spike initial "streaming direct Android" (2026-09-02) — historique
 
 Objectif du spike (priorité 3 du plan de reprise) : `videoId → URL audio
 valide → Media3 → son`, sans passer par le serveur. Investigation réelle
@@ -91,8 +98,7 @@ consulté ni copié) :
   confirme littéralement la description déjà écrite côté serveur ("code
   compilé Closure avec table de chaînes indexée, pas le schéma classique").
 
-**Conclusion du spike, honnête : blocage reconfirmé en conditions réelles
-depuis Android, pas contourné.** La seule piste qui reste plausible et non
+**Conclusion du spike initial : blocage confirmé à cette date.** La piste qui restait plausible et non
 essayée — exécuter le `base.js` réel dans un bac à sable JS pour en extraire
 la fonction de déchiffrement dynamiquement (mentionnée ci-dessus) —
 bénéficierait sur Android d'un avantage que le serveur n'a pas : `WebView`
@@ -104,13 +110,14 @@ déchiffrement malgré l'obfuscation (pas trouvé par l'heuristique simple
 ci-dessus), (2) l'exécuter dans une `WebView` cachée avec les bons stubs
 `window`/`document` pour qu'il ne lève pas d'exception sur des API absentes,
 (3) vérifier le résultat contre un flux réellement joué — **aucune étape de
-ça n'est testable dans cet environnement de développement (pas de SDK/
-émulateur/appareil Android ici, seul le CI GitHub Actions compile)**. Écrire
+ça n'était pas testable dans l'environnement de développement de cette date
+(pas de SDK/émulateur/appareil Android, seul le CI GitHub Actions compilait)**.
+Écrire
 du code Kotlin qui prétendrait résoudre ce point sans jamais avoir pu
 l'exécuter une seule fois en conditions réelles serait exactement le "succès
 fabriqué" interdit — donc rien n'a été codé pour ce spike. Le module
-`InnerTubeClient`/`CipherResolver` reste non commencé côté Android, pour la
-même raison déjà documentée plus haut (bouton Play mort à 100% sans lui).
+Le moteur maison n'a finalement pas été retenu : l'application utilise
+`innertubex`, intégré et vérifié en lecture réelle.
 
 Prochaine étape si ce chantier est repris : d'abord isoler manuellement (pas
 par regex fragile) le point d'entrée de déchiffrement dans un `base.js` réel

@@ -163,6 +163,8 @@ class PlayerController(context: Context) {
         controller?.seekTo(ms)
     }
 
+    fun currentMediaItem(): MediaItem? = controller?.currentMediaItem
+
     fun tickPosition() {
         _positionMs.value = controller?.currentPosition?.coerceAtLeast(0) ?: 0L
         _durationMs.value = controller?.duration?.coerceAtLeast(0) ?: 0L

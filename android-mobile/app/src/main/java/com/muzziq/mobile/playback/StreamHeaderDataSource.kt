@@ -26,9 +26,28 @@ private class StreamHeaderDataSource(
     }
 
     override fun open(dataSpec: DataSpec): Long {
-        val headers = StandaloneMusicSourceHolder.instance?.onlineStreamHeaders(dataSpec.uri).orEmpty()
+        val request = StandaloneMusicSourceHolder.instance?.onlineStreamRequest(dataSpec.uri)
+        val headers = request?.headers.orEmpty()
+        // Certains clients YouTube ne tolèrent qu'une plage bornée. La taille
+        // n'est pas globale : elle est attachée au flux choisi par l'extracteur.
+        // `subrange(0, ...)` conserve la position courante de DataSpec, donc les
+        // reprises demandent bien le chunk suivant au CDN.
+        val chunkSize = request?.rangeChunkSizeBytes
+            ?.takeIf { it > 0 }
+            ?: CHUNK_LENGTH_BYTES
+        // Les URLs audio signées de YouTube peuvent répondre 403 après une
+        // lecture non bornée, même lorsque l'extracteur ne marque pas
+        // explicitement le flux comme "range-only". Toutes les ouvertures
+        // d'un flux résolu sont donc bornées, comme dans MetroList. La
+        // position courante est conservée par DataSpec.subrange.
+        val boundedLength = request?.contentLengthBytes
+            ?.let { remaining -> (remaining - dataSpec.position).coerceAtLeast(0L) }
+            ?.let { remaining -> minOf(chunkSize, remaining) }
+            ?.takeIf { it > 0L }
+        val boundedSpec = if (request == null || dataSpec.length >= 0) dataSpec
+        else dataSpec.subrange(0, boundedLength ?: chunkSize)
         return upstream.open(
-            if (headers.isEmpty()) dataSpec else dataSpec.withAdditionalHeaders(headers),
+            if (headers.isEmpty()) boundedSpec else boundedSpec.withAdditionalHeaders(headers),
         )
     }
 
@@ -40,4 +59,8 @@ private class StreamHeaderDataSource(
     override fun getResponseHeaders(): Map<String, List<String>> = upstream.responseHeaders
 
     override fun close() = upstream.close()
+
+    private companion object {
+        const val CHUNK_LENGTH_BYTES = 512L * 1024L
+    }
 }

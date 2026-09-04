@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Thème sombre par défaut, jamais de flash blanc au démarrage (§56.1). -->
-    <style name="Theme.MuzziQ" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.MuzziQ" parent="Theme.AppCompat.NoActionBar">
         <item name="android:statusBarColor">@color/bg</item>
         <item name="android:navigationBarColor">@color/bg</item>
         <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="colorPrimary">@color/brand</item>
+        <item name="colorAccent">@color/brand</item>
+        <item name="mediaRouteTheme">@style/Theme.MuzziQ.CastDialog</item>
         <item name="android:windowLightStatusBar" tools:targetApi="23">false</item>
     </style>
 
@@ -12,5 +16,21 @@
         <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/bg</item>
         <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@mipmap/ic_launcher</item>
         <item name="postSplashScreenTheme" tools:targetApi="31">@style/Theme.MuzziQ</item>
+    </style>
+
+    <!-- MediaRouter calcule le contraste à partir de colorBackground et refuse
+         une valeur transparente, contrairement au thème Compose de l'écran. -->
+    <style name="Theme.MuzziQ.MediaRouter" parent="Theme.MediaRouter">
+        <item name="android:colorBackground">@color/bg</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="colorPrimary">@color/brand</item>
+        <item name="colorAccent">@color/brand</item>
+    </style>
+
+    <style name="Theme.MuzziQ.CastDialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:colorBackground">@color/bg_elevated</item>
+        <item name="android:windowBackground">@color/bg_elevated</item>
+        <item name="colorPrimary">@color/brand</item>
+        <item name="colorAccent">@color/brand</item>
     </style>
 </resources>

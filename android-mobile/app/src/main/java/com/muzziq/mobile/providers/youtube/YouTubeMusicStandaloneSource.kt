@@ -25,6 +25,7 @@ class YouTubeMusicStandaloneSource(context: Context) {
     private val rejectedProfiles = ConcurrentHashMap<String, MutableSet<String>>()
     private val streamHeadersByUrl = ConcurrentHashMap<String, Map<String, String>>()
     @Volatile private var activeStreamHeaders: Map<String, String> = emptyMap()
+    @Volatile private var activeOnlineStream: ResolvedOnlineStream? = null
 
     suspend fun search(query: String): Result<List<Track>> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext Result.success(emptyList())
@@ -32,6 +33,7 @@ class YouTubeMusicStandaloneSource(context: Context) {
             val body = JSONObject()
                 .put("context", context())
                 .put("query", query)
+                .put("params", SONG_SEARCH_PARAMS)
                 .toString()
                 .toRequestBody(JSON)
             val request = Request.Builder()
@@ -39,6 +41,9 @@ class YouTubeMusicStandaloneSource(context: Context) {
                 .post(body)
                 .header("Origin", "https://music.youtube.com")
                 .header("Referer", "https://music.youtube.com/")
+                .header("User-Agent", WEB_USER_AGENT)
+                .header("X-YouTube-Client-Name", WEB_CLIENT_ID)
+                .header("X-YouTube-Client-Version", WEB_CLIENT_VERSION)
                 .build()
             val json = client.newCall(request).execute().use { response ->
                 check(response.isSuccessful) { "Recherche YouTube Music: HTTP ${response.code}" }
@@ -64,6 +69,7 @@ class YouTubeMusicStandaloneSource(context: Context) {
                 selectedStreams[videoId] = stream
                 streamHeadersByUrl[stream.url] = stream.headers
                 activeStreamHeaders = stream.headers
+                activeOnlineStream = stream
                 return@withContext Result.success(stream.url)
             }
             lastError = extracted.exceptionOrNull()
@@ -105,9 +111,11 @@ class YouTubeMusicStandaloneSource(context: Context) {
             }
             val stream = result.getOrNull()
             if (stream != null) {
-                selectedStreams[videoId] = stream.toOnlineStream()
-                streamHeadersByUrl[stream.url] = stream.profile.streamHeaders()
-                activeStreamHeaders = stream.profile.streamHeaders()
+                val onlineStream = stream.toOnlineStream()
+                selectedStreams[videoId] = onlineStream
+                streamHeadersByUrl[onlineStream.url] = onlineStream.headers
+                activeStreamHeaders = onlineStream.headers
+                activeOnlineStream = onlineStream
                 return@withContext Result.success(stream.url)
             }
             lastError = result.exceptionOrNull()
@@ -121,6 +129,7 @@ class YouTubeMusicStandaloneSource(context: Context) {
         val stream = selectedStreams.remove(videoId) ?: return
         streamHeadersByUrl.remove(stream.url)
         if (activeStreamHeaders == stream.headers) activeStreamHeaders = emptyMap()
+        if (activeOnlineStream?.url == stream.url) activeOnlineStream = null
         val key = if (stream.profileKey.startsWith("extractor:")) "extractor" else stream.profileKey
         rejectedProfiles.getOrPut(videoId) { ConcurrentHashMap.newKeySet() }.add(key)
     }
@@ -133,6 +142,22 @@ class YouTubeMusicStandaloneSource(context: Context) {
      * en ligne actif : les en-têtes actifs sont le repli sûr dans ce cas. */
     fun streamHeaders(url: String): Map<String, String> =
         streamHeadersByUrl[url] ?: activeStreamHeaders
+
+    fun streamRequest(url: String): StreamRequest {
+        // Media3 peut normaliser le texte d'une URL signée lors de sa
+        // conversion en Uri. Le flux actif reste donc le repli fiable pour
+        // conserver les mêmes headers et contraintes de lecture.
+        val stream = selectedStreams.values.firstOrNull { it.url == url } ?: activeOnlineStream
+        return StreamRequest(
+            headers = stream?.headers ?: activeStreamHeaders,
+            contentLengthBytes = stream?.contentLengthBytes,
+            requireBoundedRange = stream?.requireBoundedRange == true,
+            rangeChunkSizeBytes = stream?.rangeChunkSizeBytes
+                ?.takeIf { it > 0 }
+                ?: ResolvedOnlineStream.DEFAULT_RANGE_CHUNK_BYTES,
+            useRangeChunks = stream?.useRangeChunks == true,
+        )
+    }
 
     /** Une lecture de deux octets avec Range valide l'URL signée et le profil avant
      * de déléguer au player. Une 200 est aussi acceptable : certains CDN ignorent
@@ -151,7 +176,7 @@ class YouTubeMusicStandaloneSource(context: Context) {
     private fun context() = JSONObject()
         .put("client", JSONObject()
             .put("clientName", "WEB_REMIX")
-            .put("clientVersion", "1.20260901.01.00")
+            .put("clientVersion", WEB_CLIENT_VERSION)
             .put("hl", "fr")
             .put("gl", "BE"))
 
@@ -188,9 +213,40 @@ class YouTubeMusicStandaloneSource(context: Context) {
         )
     }
 
+    data class StreamRequest(
+        val headers: Map<String, String>,
+        val contentLengthBytes: Long?,
+        val requireBoundedRange: Boolean,
+        val rangeChunkSizeBytes: Long,
+        val useRangeChunks: Boolean,
+    )
+
     private fun parseSearch(root: JSONObject): List<Track> {
         val results = mutableListOf<Track>()
-        collectTracks(root, null, results)
+        // Ne parcourt jamais tout le JSON : les réponses contiennent aussi des
+        // recommandations, des cartes d'actualité et des sections de navigation.
+        // Seules les sections de résultats de l'onglet Songs sont des pistes.
+        val sections = root.optJSONObject("contents")
+            ?.optJSONObject("tabbedSearchResultsRenderer")
+            ?.optJSONArray("tabs")
+            ?.optJSONObject(0)
+            ?.optJSONObject("tabRenderer")
+            ?.optJSONObject("content")
+            ?.optJSONObject("sectionListRenderer")
+            ?.optJSONArray("contents")
+            ?: return emptyList()
+        for (index in 0 until sections.length()) {
+            val section = sections.optJSONObject(index) ?: continue
+            val items = section.optJSONObject("musicShelfRenderer")?.optJSONArray("contents")
+                ?: section.optJSONObject("itemSectionRenderer")?.optJSONArray("contents")
+                ?: continue
+            for (itemIndex in 0 until items.length()) {
+                val renderer = items.optJSONObject(itemIndex)
+                    ?.optJSONObject("musicResponsiveListItemRenderer")
+                    ?: continue
+                trackFromRenderer(renderer, null)?.let(results::add)
+            }
+        }
         return results.distinctBy { it.id }.take(30)
     }
 
@@ -294,6 +350,12 @@ class YouTubeMusicStandaloneSource(context: Context) {
     companion object {
         private const val API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
         private const val BASE_URL = "https://music.youtube.com/youtubei/v1"
+        private const val WEB_CLIENT_ID = "67"
+        private const val WEB_CLIENT_VERSION = "1.20260114.03.00"
+        private const val WEB_USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        private const val SONG_SEARCH_PARAMS = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"
         private val JSON = "application/json; charset=utf-8".toMediaType()
         /** Secours brut uniquement : le chemin normal passe par l'extracteur.
          * Les flux iOS imposent des plages bornées et ne sont donc pas remis à

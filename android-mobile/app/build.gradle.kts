@@ -122,6 +122,8 @@ dependencies {
     implementation(libs.media3.common)
     implementation(libs.media3.datasource.okhttp)
     implementation(libs.media3.datasource)
+    implementation(libs.media3.cast)
+    implementation(libs.play.services.cast.framework)
 
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.moshi)
@@ -139,6 +141,7 @@ dependencies {
     // Custom Tabs — onglet sécurisé pour l'écran de connexion Spotify (PKCE mobile),
     // jamais une WebView maison (voir SpotifyAuthManager, commentaire de tête).
     implementation(libs.androidx.browser)
+    implementation(libs.appcompat)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)

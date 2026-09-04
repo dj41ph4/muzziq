@@ -1,5 +1,6 @@
 package com.muzziq.mobile.ui.player
 
+import android.view.ContextThemeWrapper
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloatAsState
@@ -50,6 +51,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.mediarouter.app.MediaRouteButton
+import com.google.android.gms.cast.framework.CastButtonFactory
 import coil.compose.SubcomposeAsyncImage
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
@@ -179,6 +183,8 @@ fun SharedTransitionScope.PlayerScreen(
     queueIndex: Int,
     onJumpToQueueIndex: (Int) -> Unit,
     lyricsProvider: LyricsProvider,
+    isCasting: Boolean = false,
+    onToggleCast: () -> Unit = {},
 ) {
     val dominant = rememberDominantColor(track.artworkUrl)
     val animatedDominant by animateFloatAsState(targetValue = 1f, animationSpec = tween(600), label = "grad")
@@ -200,6 +206,22 @@ fun SharedTransitionScope.PlayerScreen(
                 IconButton(onClick = onCollapse) {
                     Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = null, tint = MuzziQColors.TextPrimary)
                 }
+                AndroidView(
+                    factory = { context ->
+                        // Compose fournit souvent un thème sans couleur de
+                        // fond Android (transparent). MediaRouter exige une
+                        // couleur opaque pour calculer le contraste de son
+                        // sélecteur ; on lui donne son thème officiel isolé.
+                        val mediaRouterContext = ContextThemeWrapper(
+                            context,
+                            com.muzziq.mobile.R.style.Theme_MuzziQ_MediaRouter,
+                        )
+                        MediaRouteButton(mediaRouterContext).also { button ->
+                            CastButtonFactory.setUpMediaRouteButton(context, button)
+                        }
+                    },
+                    modifier = Modifier.size(40.dp),
+                )
                 Row(
                     Modifier.weight(1f).padding(start = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

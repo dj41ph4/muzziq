@@ -37,10 +37,9 @@ class StandaloneStreamExtractor(context: Context) {
                 hints = ContentHints(wantVideo = false).withStreamCapabilities(
                     allowHls = false,
                     allowSabr = false,
-                    // Media3 lit ici un flux progressif direct. Les profils qui
-                    // imposent des plages bornées sont exclus tant que le lecteur
-                    // ne possède pas encore un DataSource à fragments dédiés.
-                    allowBoundedRange = false,
+                    // Les flux YouTube récents peuvent exiger des plages bornées.
+                    // MuzziQ conserve la taille exacte fournie par l'extracteur.
+                    allowBoundedRange = true,
                 ),
                 excludedClients = emptySet(),
                 audioQuality = AudioQuality.HIGH,
@@ -52,6 +51,11 @@ class StandaloneStreamExtractor(context: Context) {
             mimeType = stream.mimeType,
             headers = stream.headers,
             profileKey = "extractor:${stream.profileId}",
+            contentLengthBytes = stream.contentLengthBytes,
+            requireBoundedRange = stream.requireBoundedRange,
+            rangeChunkSizeBytes = stream.rangeChunkSizeBytes,
+            useRangeChunks = stream.useRangeChunks,
+            clientName = stream.clientName,
         )
     }
 
@@ -86,4 +90,13 @@ data class ResolvedOnlineStream(
     val mimeType: String?,
     val headers: Map<String, String>,
     val profileKey: String,
-)
+    val contentLengthBytes: Long? = null,
+    val requireBoundedRange: Boolean = false,
+    val rangeChunkSizeBytes: Long = DEFAULT_RANGE_CHUNK_BYTES,
+    val useRangeChunks: Boolean = false,
+    val clientName: String? = null,
+) {
+    companion object {
+        const val DEFAULT_RANGE_CHUNK_BYTES = 512L * 1024L
+    }
+}

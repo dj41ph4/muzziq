@@ -6,11 +6,11 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -46,6 +46,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -73,6 +74,7 @@ import com.muzziq.mobile.ui.search.SearchScreen
 import com.muzziq.mobile.ui.settings.SettingsScreen
 import com.muzziq.mobile.ui.theme.MuzziQColors
 import com.muzziq.mobile.ui.theme.MuzziQTheme
+import com.muzziq.mobile.playback.CastController
 import kotlinx.coroutines.delay
 
 /** Schéma/host du deep link de retour Spotify — doit rester identique à
@@ -84,7 +86,7 @@ import kotlinx.coroutines.delay
 private const val SPOTIFY_CALLBACK_SCHEME = "muzziq"
 private const val SPOTIFY_CALLBACK_HOST = "spotify-callback"
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private val vm: AppViewModel by viewModels()
 
     private val requestAudioPermission = registerForActivityResult(
@@ -189,6 +191,44 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             val serverUrl by vm.serverUrl.collectAsStateWithLifecycle()
             var showPlaylistPicker by remember { mutableStateOf(false) }
             var showSettings by remember { mutableStateOf(false) }
+            val castController = remember(context) { CastController(context) }
+            val isCasting by castController.isCasting.collectAsStateWithLifecycle()
+            val castIsPlaying by castController.isPlayingState.collectAsStateWithLifecycle()
+            val castPositionMs by castController.positionMs.collectAsStateWithLifecycle()
+            val castDurationMs by castController.durationMs.collectAsStateWithLifecycle()
+
+            DisposableEffect(castController) {
+                castController.initialize()
+                onDispose { castController.release() }
+            }
+
+            // Le bouton système ouvre le sélecteur Cast. Une fois la session
+            // réellement établie, le CastPlayer reçoit l'URL déjà résolue et
+            // sa position courante ; le lecteur local est alors mis en pause.
+            var wasCasting by remember { mutableStateOf(false) }
+            LaunchedEffect(isCasting, currentTrack?.id) {
+                if (isCasting) {
+                    vm.player.currentMediaItem()?.let { item ->
+                        castController.loadCurrent(item, positionMs, isPlaying)
+                        if (isPlaying) vm.player.togglePlayPause()
+                    }
+                } else if (wasCasting) {
+                    vm.player.seekTo(castController.currentPosition())
+                    if (castController.wasPlayingBeforeCast()) vm.player.togglePlayPause()
+                }
+                wasCasting = isCasting
+            }
+
+            LaunchedEffect(isCasting) {
+                while (isCasting) {
+                    castController.refresh()
+                    delay(500)
+                }
+            }
+
+            val shownIsPlaying = if (isCasting) castIsPlaying else isPlaying
+            val shownPositionMs = if (isCasting) castPositionMs else positionMs
+            val shownDurationMs = if (isCasting) castDurationMs else durationMs
 
             LaunchedEffect(currentTrack) {
                 while (currentTrack != null) {
@@ -220,11 +260,15 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                                 ) {
                                     MiniPlayer(
                                         track = track,
-                                        isPlaying = isPlaying,
-                                        positionMs = positionMs,
-                                        durationMs = durationMs,
+                                        isPlaying = shownIsPlaying,
+                                        positionMs = shownPositionMs,
+                                        durationMs = shownDurationMs,
                                         animatedVisibilityScope = this@AnimatedVisibility,
-                                        onTogglePlayPause = { vm.player.togglePlayPause(vm.musicSource) },
+                                        onTogglePlayPause = {
+                                            if (isCasting) {
+                                                if (castController.isPlaying()) castController.pause() else castController.play()
+                                            } else vm.player.togglePlayPause(vm.musicSource)
+                                        },
                                         onExpand = { expanded = true },
                                     )
                                 }
@@ -317,12 +361,16 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                     ) {
                         PlayerScreen(
                             track = track,
-                            isPlaying = isPlaying,
-                            positionMs = positionMs,
-                            durationMs = durationMs,
+                            isPlaying = shownIsPlaying,
+                            positionMs = shownPositionMs,
+                            durationMs = shownDurationMs,
                             animatedVisibilityScope = this@AnimatedVisibility,
-                            onTogglePlayPause = { vm.player.togglePlayPause(vm.musicSource) },
-                            onSeek = { vm.player.seekTo(it) },
+                            onTogglePlayPause = {
+                                if (isCasting) {
+                                    if (castController.isPlaying()) castController.pause() else castController.play()
+                                } else vm.player.togglePlayPause(vm.musicSource)
+                            },
+                            onSeek = { if (isCasting) castController.seekTo(it) else vm.player.seekTo(it) },
                             onCollapse = { expanded = false },
                             onSkipNext = { vm.player.skipNext() },
                             onSkipPrevious = { vm.player.skipPrevious() },
@@ -336,6 +384,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             queueIndex = playerQueueIndex,
                             onJumpToQueueIndex = { vm.player.jumpToQueueIndex(it) },
                             lyricsProvider = vm.lyricsProvider,
+                            isCasting = isCasting,
                         )
                     }
                 }

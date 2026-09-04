@@ -72,6 +72,9 @@ class StandaloneMusicSource(context: Context) : MusicSource {
 
     fun onlineStreamHeaders(uri: android.net.Uri): Map<String, String> = youtube.streamHeaders(uri.toString())
 
+    fun onlineStreamRequest(uri: android.net.Uri): YouTubeMusicStandaloneSource.StreamRequest =
+        youtube.streamRequest(uri.toString())
+
     fun recordPlayback(track: Track, positionMs: Long, durationMs: Long) {
         val uri = (track.source as? TrackSource.Local)?.contentUri ?: return
         db.recordPlayEvent(uri, track.artist, positionMs, durationMs)
