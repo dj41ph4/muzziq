@@ -198,10 +198,10 @@ export default function PlexSettingsPage() {
     setSyncingPlaylists(true);
     setPlaylistResult(null);
     try {
-      const res = await post<{ ok: boolean; playlistsSeen: number; playlistsCreated: number; tracksSeen: number; tracksAdded: number; recordingsCreated: number; skipped: number; errors: string[] }>(
+      const res = await post<{ ok: boolean; playlistsSeen: number; playlistsCreated: number; tracksSeen: number; tracksAdded: number; exportedTracks: number; remotePlaylistsCreated: number; recordingsCreated: number; skipped: number; errors: string[] }>(
         "/api/integrations/plex/sync/playlists"
       );
-      const summary = `${res.playlistsSeen} playlists — ${res.tracksSeen} titres vus, ${res.tracksAdded} ajoutés, ${res.recordingsCreated} nouveaux`;
+      const summary = `${res.playlistsSeen} playlists — ${res.tracksAdded} importés, ${res.exportedTracks} exportés, ${res.remotePlaylistsCreated} créées dans Plex`;
       setPlaylistResult({ ok: res.ok, summary: res.errors.length ? `${summary} · ${res.errors[0]}` : summary });
       mutate();
     } catch (e) {

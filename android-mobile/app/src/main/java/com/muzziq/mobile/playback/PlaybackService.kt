@@ -2,6 +2,7 @@ package com.muzziq.mobile.playback
 
 import android.app.PendingIntent
 import android.util.Log
+import java.io.File
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -9,6 +10,9 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -70,6 +74,8 @@ class PlaybackService : MediaLibraryService() {
 
     private var queueSource: MusicSource? = null
     private var consecutiveOnlineStreamRetries = 0
+    private var preloadedQueueIndex = -1
+    private lateinit var playbackCache: SimpleCache
     private val queueStateStore by lazy { QueueStateStore(this) }
 
     // Rempli à chaque construction d'item navigable (onGetChildren) — consulté par
@@ -83,9 +89,17 @@ class PlaybackService : MediaLibraryService() {
         // Chaque flux en ligne a son propre profil et ses propres en-têtes. Ils
         // sont injectés par URL lors de chaque ouverture/reprise du DataSpec.
         val httpDataSourceFactory = OkHttpDataSource.Factory(okhttp3.OkHttpClient())
+        playbackCache = SimpleCache(
+            File(cacheDir, "muzziq-audio-cache"),
+            LeastRecentlyUsedCacheEvictor(PLAYBACK_CACHE_BYTES),
+        )
+        val cachedUpstreamFactory = CacheDataSource.Factory()
+            .setCache(playbackCache)
+            .setUpstreamDataSourceFactory(StreamHeaderDataSourceFactory(httpDataSourceFactory))
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         val dataSourceFactory = DefaultDataSource.Factory(
             this,
-            StreamHeaderDataSourceFactory(httpDataSourceFactory),
+            cachedUpstreamFactory,
         )
         val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
@@ -102,7 +116,10 @@ class PlaybackService : MediaLibraryService() {
 
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY) consecutiveOnlineStreamRetries = 0
+                if (state == Player.STATE_READY) {
+                    consecutiveOnlineStreamRetries = 0
+                    preloadNextTrack()
+                }
                 if (state == Player.STATE_ENDED) {
                     recordAffinity(completed = true)
                     if (hasNext()) skipNext()
@@ -152,6 +169,7 @@ class PlaybackService : MediaLibraryService() {
         queue = listOf(track)
         queueIndex = 0
         queueSource = source
+        preloadedQueueIndex = -1
         scope.launch { resolveAndPlay(track, source) }
     }
 
@@ -163,6 +181,7 @@ class PlaybackService : MediaLibraryService() {
         queue = tracks
         queueIndex = startIndex.coerceIn(0, tracks.lastIndex)
         queueSource = source
+        preloadedQueueIndex = -1
         scope.launch { resolveAndPlay(queue[queueIndex], source) }
     }
 
@@ -170,6 +189,7 @@ class PlaybackService : MediaLibraryService() {
         val source = queueSource ?: return
         if (queue.isEmpty() || queueIndex >= queue.lastIndex) return
         queueIndex += 1
+        preloadedQueueIndex = -1
         scope.launch { resolveAndPlay(queue[queueIndex], source) }
     }
 
@@ -177,6 +197,7 @@ class PlaybackService : MediaLibraryService() {
         val source = queueSource ?: return
         if (queue.isEmpty() || queueIndex <= 0) return
         queueIndex -= 1
+        preloadedQueueIndex = -1
         scope.launch { resolveAndPlay(queue[queueIndex], source) }
     }
 
@@ -187,6 +208,7 @@ class PlaybackService : MediaLibraryService() {
         val source = queueSource ?: return
         if (index !in queue.indices || index == queueIndex) return
         queueIndex = index
+        preloadedQueueIndex = -1
         scope.launch { resolveAndPlay(queue[queueIndex], source) }
     }
 
@@ -229,6 +251,20 @@ class PlaybackService : MediaLibraryService() {
         scope.launch { queueStateStore.save(queue, queueIndex, position) }
     }
 
+    /** Résout le titre suivant après le vrai démarrage du courant. Ainsi l'UI et
+     * Media3 ne manipulent jamais une URL signée expirée dans la file, mais le
+     * passage au suivant évite l'aller-retour InnerTube. */
+    private fun preloadNextTrack() {
+        val nextIndex = queueIndex + 1
+        val source = queueSource as? StandaloneMusicSource ?: return
+        if (nextIndex !in queue.indices || preloadedQueueIndex == nextIndex) return
+        preloadedQueueIndex = nextIndex
+        scope.launch(Dispatchers.IO) {
+            runCatching { source.preloadOnlineStream(queue[nextIndex]) }
+                .onFailure { Log.d(TAG, "Pré-résolution du titre suivant ignorée", it) }
+        }
+    }
+
     private fun recordAffinity(completed: Boolean) {
         val track = currentTrack ?: return
         val standalone = StandaloneMusicSourceHolder.instance ?: return
@@ -241,6 +277,7 @@ class PlaybackService : MediaLibraryService() {
         PlaybackServiceBridge.detach(this)
         mediaSession?.release()
         player.release()
+        playbackCache.release()
         scope.cancel()
         super.onDestroy()
     }
@@ -406,6 +443,7 @@ class PlaybackService : MediaLibraryService() {
     companion object {
         private const val TAG = "MuzziQPlayback"
         private const val MAX_ONLINE_STREAM_RETRIES = 2
+        private const val PLAYBACK_CACHE_BYTES = 96L * 1024L * 1024L
         const val ROOT_ID = "muzziq_root"
         const val LIBRARY_ID = "muzziq_library"
         const val PLAYLISTS_ID = "muzziq_playlists"

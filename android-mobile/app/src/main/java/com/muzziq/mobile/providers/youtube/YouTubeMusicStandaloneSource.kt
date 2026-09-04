@@ -1,6 +1,7 @@
 package com.muzziq.mobile.providers.youtube
 
 import android.content.Context
+import android.net.Uri
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
 import kotlinx.coroutines.Dispatchers
@@ -56,20 +57,22 @@ class YouTubeMusicStandaloneSource(context: Context) {
     suspend fun resolvePlayableUri(track: Track): Result<String> = withContext(Dispatchers.IO) {
         val videoId = (track.source as? TrackSource.YouTube)?.videoId
             ?: return@withContext Result.failure(IllegalArgumentException("Source YouTube invalide"))
+        // Une URL InnerTube est signée mais reste normalement valable plusieurs heures.
+        // Rejouer le même titre ou passer au suivant pré-résolu ne doit donc pas refaire
+        // une requête player à chaque fois.
+        selectedStreams[videoId]?.takeIf(::isStillValid)?.let { stream ->
+            activate(stream)
+            return@withContext Result.success(stream.url)
+        }
+        selectedStreams.remove(videoId)
         var lastError: Throwable? = null
         val rejected = rejectedProfiles[videoId].orEmpty()
         if ("extractor" !in rejected) {
-            val extracted = extractor.resolve(videoId).mapCatching { stream ->
-                check(probeAudioStream(stream.url, stream.headers)) {
-                    "Le CDN a refusé le flux extrait avant lecture"
-                }
-                stream
-            }
+            // Ne jamais sonder le CDN avant de démarrer : ce Range bloquait la
+            // lecture alors que Media3 sait ouvrir le flux directement.
+            val extracted = extractor.resolve(videoId)
             extracted.getOrNull()?.let { stream ->
-                selectedStreams[videoId] = stream
-                streamHeadersByUrl[stream.url] = stream.headers
-                activeStreamHeaders = stream.headers
-                activeOnlineStream = stream
+                remember(videoId, stream)
                 return@withContext Result.success(stream.url)
             }
             lastError = extracted.exceptionOrNull()
@@ -104,18 +107,12 @@ class YouTubeMusicStandaloneSource(context: Context) {
                     .maxByOrNull { it.optLong("bitrate", 0L) }
                     ?: error("InnerTube n'a retourné aucun flux audio direct")
                 val url = bestAudio.getString("url")
-                check(probeAudioStream(url, profile.streamHeaders())) {
-                    "Le CDN a refusé le flux ${profile.name} avant lecture"
-                }
                 ResolvedStream(url, profile)
             }
             val stream = result.getOrNull()
             if (stream != null) {
                 val onlineStream = stream.toOnlineStream()
-                selectedStreams[videoId] = onlineStream
-                streamHeadersByUrl[onlineStream.url] = onlineStream.headers
-                activeStreamHeaders = onlineStream.headers
-                activeOnlineStream = onlineStream
+                remember(videoId, onlineStream)
                 return@withContext Result.success(stream.url)
             }
             lastError = result.exceptionOrNull()
@@ -135,6 +132,11 @@ class YouTubeMusicStandaloneSource(context: Context) {
     }
 
     fun selectedMimeType(videoId: String): String? = selectedStreams[videoId]?.mimeType
+
+    /** Résout le titre suivant à l'avance sans commencer sa lecture. */
+    suspend fun preload(track: Track) {
+        resolvePlayableUri(track)
+    }
 
     /** En-têtes du profil ayant effectivement validé cette URL, consommés par Media3. */
     /** Media3 peut normaliser une URL signée lors de sa conversion en Uri. La
@@ -159,18 +161,22 @@ class YouTubeMusicStandaloneSource(context: Context) {
         )
     }
 
-    /** Une lecture de deux octets avec Range valide l'URL signée et le profil avant
-     * de déléguer au player. Une 200 est aussi acceptable : certains CDN ignorent
-     * volontairement la petite plage demandée. */
-    private fun probeAudioStream(url: String, headers: Map<String, String>): Boolean {
-        val request = Request.Builder()
-            .url(url)
-            .header("Range", "bytes=0-1")
-            .apply { headers.forEach { (name, value) -> header(name, value) } }
-            .build()
-        return client.newCall(request).execute().use { response ->
-            response.code == 200 || response.code == 206
-        }
+    private fun remember(videoId: String, stream: ResolvedOnlineStream) {
+        selectedStreams[videoId] = stream
+        activate(stream)
+    }
+
+    private fun activate(stream: ResolvedOnlineStream) {
+        streamHeadersByUrl[stream.url] = stream.headers
+        activeStreamHeaders = stream.headers
+        activeOnlineStream = stream
+    }
+
+    private fun isStillValid(stream: ResolvedOnlineStream): Boolean {
+        val expiryMs = Uri.parse(stream.url).getQueryParameter("expire")
+            ?.toLongOrNull()?.times(1_000L)
+        return expiryMs?.let { System.currentTimeMillis() < it - URL_EXPIRY_SAFETY_MS }
+            ?: (System.currentTimeMillis() - stream.resolvedAtEpochMs < SESSION_URL_TTL_MS)
     }
 
     private fun context() = JSONObject()
@@ -354,6 +360,8 @@ class YouTubeMusicStandaloneSource(context: Context) {
     }
 
     companion object {
+        private const val URL_EXPIRY_SAFETY_MS = 30_000L
+        private const val SESSION_URL_TTL_MS = 20 * 60 * 1_000L
         private const val API_KEY = "AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30"
         private const val BASE_URL = "https://music.youtube.com/youtubei/v1"
         private const val WEB_CLIENT_ID = "67"

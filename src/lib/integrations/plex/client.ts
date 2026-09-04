@@ -314,6 +314,37 @@ export async function getPlaylistTracks(
   return out;
 }
 
+/** Crée une playlist audio Plex vide. Cette écriture ne transporte que des
+ * identifiants de métadonnées déjà présents sur le serveur Plex. */
+export async function createAudioPlaylist(config: Pick<PlexConfig, "serverUrl" | "token" | "clientId">, title: string): Promise<PlexAudioPlaylist | null> {
+  const origin = plexOrigin(config);
+  if (!origin || !config.token) return null;
+  try {
+    const url = new URL(`${origin}/playlists`);
+    url.searchParams.set("type", "audio");
+    url.searchParams.set("title", title);
+    url.searchParams.set("smart", "0");
+    const res = await fetchWithRetry(url.toString(), { method: "POST", headers: serverHeaders(config.clientId, config.token) });
+    if (!res.ok) return null;
+    const p = (await res.json())?.MediaContainer?.Metadata?.[0];
+    return p?.ratingKey ? { ratingKey: String(p.ratingKey), title: p.title ?? title } : null;
+  } catch { return null; }
+}
+
+/** Ajoute des titres connus de Plex à une playlist. Pas de recherche catalogue,
+ * pas de téléchargement et aucun URI de streaming n'est manipulé. */
+export async function addTracksToPlaylist(config: Pick<PlexConfig, "serverUrl" | "token" | "clientId" | "machineIdentifier">, playlistId: string, ratingKeys: string[]): Promise<boolean> {
+  const origin = plexOrigin(config);
+  if (!origin || !config.token || !config.machineIdentifier || ratingKeys.length === 0) return false;
+  try {
+    const uri = `server://${config.machineIdentifier}/com.plexapp.plugins.library/library/metadata/${ratingKeys.join(",")}`;
+    const url = new URL(`${origin}/playlists/${encodeURIComponent(playlistId)}/items`);
+    url.searchParams.set("uri", uri);
+    const res = await fetchWithRetry(url.toString(), { method: "PUT", headers: serverHeaders(config.clientId, config.token) });
+    return res.ok;
+  } catch { return false; }
+}
+
 /** Marque une piste "lue" côté Plex (export, §10 seulement depuis le serveur, jamais depuis l'UI). Best-effort. */
 export async function scrobblePlexTrack(config: Pick<PlexConfig, "serverUrl" | "token" | "clientId">, ratingKey: string): Promise<boolean> {
   const origin = plexOrigin(config);

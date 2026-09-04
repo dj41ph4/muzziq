@@ -160,7 +160,13 @@ class PlayerController(context: Context) {
     }
 
     fun seekTo(ms: Long) {
-        controller?.seekTo(ms)
+        val player = controller ?: return
+        // Sur un flux réseau, seekTo() peut placer ExoPlayer en buffering et faire
+        // transitoirement tomber isPlaying à false. Conserver l'intention de lecture
+        // avant le seek évite le silence définitif constaté après une avance rapide.
+        val shouldResume = player.playWhenReady || player.isPlaying
+        player.seekTo(ms.coerceAtLeast(0L))
+        if (shouldResume) player.play()
     }
 
     fun currentMediaItem(): MediaItem? = controller?.currentMediaItem

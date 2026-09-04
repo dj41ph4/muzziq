@@ -67,6 +67,11 @@ class StandaloneMusicSource(context: Context) : MusicSource {
         (track.source as? TrackSource.YouTube)?.let { youtube.markCurrentProfileRejected(it.videoId) }
     }
 
+    /** Prépare seulement l'URL du titre suivant ; le service reste maître de la lecture. */
+    suspend fun preloadOnlineStream(track: Track) {
+        if (track.source is TrackSource.YouTube) youtube.preload(track)
+    }
+
     fun onlineMimeType(track: Track): String? =
         (track.source as? TrackSource.YouTube)?.let { youtube.selectedMimeType(it.videoId) }
 

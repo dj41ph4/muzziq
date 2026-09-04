@@ -6,6 +6,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -164,7 +167,7 @@ private enum class PlayerPanel(val label: String) {
  * inventé. Slider + contrôles de lecture restent visibles sur les trois onglets (façon
  * Spotify : on garde la main sur la lecture même en consultant Paroles/Queue).
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SharedTransitionScope.PlayerScreen(
     track: Track,
@@ -330,14 +333,38 @@ fun SharedTransitionScope.PlayerScreen(
             var sliderPosition by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(positionMs.toFloat()) }
             LaunchedEffect(positionMs) { sliderPosition = positionMs.toFloat() }
 
-            Slider(
-                value = sliderPosition,
-                onValueChange = { sliderPosition = it },
-                onValueChangeFinished = { onSeek(sliderPosition.toLong()) },
-                valueRange = 0f..(durationMs.coerceAtLeast(1)).toFloat(),
-                colors = SliderDefaults.colors(thumbColor = MuzziQColors.Brand, activeTrackColor = MuzziQColors.Brand),
-                modifier = Modifier.padding(top = 24.dp),
-            )
+            // Timeline MuzziQ : curseur "pulse" lumineux dans une capsule, distinct
+            // de la simple barre rectiligne MetroList. La zone tactile reste large.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MuzziQColors.SurfaceRaised.copy(alpha = 0.62f))
+                    .padding(horizontal = 4.dp),
+            ) {
+                Slider(
+                    value = sliderPosition,
+                    onValueChange = { sliderPosition = it },
+                    onValueChangeFinished = { onSeek(sliderPosition.toLong()) },
+                    valueRange = 0f..(durationMs.coerceAtLeast(1)).toFloat(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color.Transparent,
+                        activeTrackColor = MuzziQColors.Brand,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.10f),
+                    ),
+                    thumb = {
+                        Box(
+                            Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .background(MuzziQColors.Brand)
+                                .border(3.dp, MuzziQColors.BgElevated, CircleShape),
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().height(36.dp),
+                )
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(formatMs(sliderPosition.toLong()), color = MuzziQColors.TextFaint, fontSize = 11.sp)
                 Text(formatMs(durationMs), color = MuzziQColors.TextFaint, fontSize = 11.sp)

@@ -1,8 +1,8 @@
 import { getPlexConfig, updatePlexConfig } from "./store";
-import { getAudioPlaylists, getPlaylistTracks } from "./client";
+import { addTracksToPlaylist, createAudioPlaylist, getAudioPlaylists, getPlaylistTracks } from "./client";
 import { addLibraryItem } from "@/lib/library/libraryItemsStore";
 import { findOrCreateRecordingFromExternal } from "@/lib/library/recordingResolution";
-import { addMapping, findRecordingIdByProvider } from "@/lib/library/providerMappingsStore";
+import { addMapping, findRecordingIdByProvider, listMappingsForRecording } from "@/lib/library/providerMappingsStore";
 import { addPlaylistItem, createPlaylist, listPlaylistItems, listPlaylists } from "@/lib/library/playlistsStore";
 import { bestMatch } from "@/lib/identity/resolver";
 import { listRecordings } from "@/lib/library/recordingsStore";
@@ -16,6 +16,8 @@ export interface PlexPlaylistSyncSummary {
   playlistsCreated: number;
   tracksSeen: number;
   tracksAdded: number;
+  exportedTracks: number;
+  remotePlaylistsCreated: number;
   recordingsCreated: number;
   skipped: number;
   errors: string[];
@@ -25,7 +27,7 @@ export interface PlexPlaylistSyncSummary {
  * métadonnées : aucun flux, téléchargement ou contrôle de lecture n'est appelé. */
 export async function syncPlexPlaylists(): Promise<PlexPlaylistSyncSummary> {
   const config = getPlexConfig();
-  const summary: PlexPlaylistSyncSummary = { ok: false, playlistsSeen: 0, playlistsCreated: 0, tracksSeen: 0, tracksAdded: 0, recordingsCreated: 0, skipped: 0, errors: [] };
+  const summary: PlexPlaylistSyncSummary = { ok: false, playlistsSeen: 0, playlistsCreated: 0, tracksSeen: 0, tracksAdded: 0, exportedTracks: 0, remotePlaylistsCreated: 0, recordingsCreated: 0, skipped: 0, errors: [] };
   if (config.syncPolicy !== "IMPORT_ONLY" && config.syncPolicy !== "BIDIRECTIONAL") {
     summary.errors.push("Politique Plex : IMPORT_ONLY ou BIDIRECTIONAL requis");
     return summary;
@@ -69,7 +71,31 @@ export async function syncPlexPlaylists(): Promise<PlexPlaylistSyncSummary> {
       }
     }
   }
+  // Fusion inverse non destructive : seules les playlists MuzziQ (pas les
+  // copies importées « Plex · ») sont exportées. Un morceau sans mapping Plex
+  // reste local, il n'est jamais recherché/ajouté approximativement dans Plex.
+  if (config.syncPolicy === "BIDIRECTIONAL") {
+    const remoteByName = new Map(playlists.map((p) => [p.title.trim().toLocaleLowerCase(), p]));
+    for (const local of listPlaylists().filter((p) => !p.name.startsWith(PREFIX))) {
+      const nameKey = local.name.trim().toLocaleLowerCase();
+      let remote = remoteByName.get(nameKey);
+      if (!remote) {
+        remote = await createAudioPlaylist(config, local.name) ?? undefined;
+        if (!remote) { summary.errors.push(`Création Plex impossible : ${local.name}`); continue; }
+        remoteByName.set(nameKey, remote);
+        summary.remotePlaylistsCreated++;
+      }
+      const remoteIds = new Set((await getPlaylistTracks(config, remote.ratingKey)).map((track) => String(track.ratingKey)));
+      const mapped = listPlaylistItems(local.id)
+        .map((item) => listMappingsForRecording(item.recordingId).find((mapping) => mapping.provider === PROVIDER)?.externalId)
+        .filter((id): id is string => !!id && !remoteIds.has(id));
+      for (const chunk of mapped.reduce<string[][]>((all, id, index) => { const bucket = Math.floor(index / 100); (all[bucket] ??= []).push(id); return all; }, [])) {
+        if (await addTracksToPlaylist(config, remote.ratingKey, chunk)) summary.exportedTracks += chunk.length;
+        else summary.errors.push(`Ajout Plex impossible : ${local.name}`);
+      }
+    }
+  }
   summary.ok = summary.errors.length === 0;
-  updatePlexConfig({ lastPlaylistSync: { at: Date.now(), ok: summary.ok, summary: `${summary.playlistsSeen} playlists Plex — ${summary.tracksAdded} titres ajoutés, ${summary.recordingsCreated} nouveaux enregistrements` } });
+  updatePlexConfig({ lastPlaylistSync: { at: Date.now(), ok: summary.ok, summary: `${summary.playlistsSeen} playlists Plex — ${summary.tracksAdded} importés, ${summary.exportedTracks} exportés` } });
   return summary;
 }

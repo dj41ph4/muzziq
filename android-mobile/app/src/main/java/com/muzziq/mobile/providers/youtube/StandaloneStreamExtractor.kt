@@ -109,6 +109,7 @@ data class ResolvedOnlineStream(
     val rangeChunkSizeBytes: Long = DEFAULT_RANGE_CHUNK_BYTES,
     val useRangeChunks: Boolean = false,
     val clientName: String? = null,
+    val resolvedAtEpochMs: Long = System.currentTimeMillis(),
 ) {
     companion object {
         const val DEFAULT_RANGE_CHUNK_BYTES = 512L * 1024L
