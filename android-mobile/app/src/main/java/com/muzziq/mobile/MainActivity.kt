@@ -1,7 +1,9 @@
 package com.muzziq.mobile
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -77,6 +79,10 @@ import com.muzziq.mobile.ui.theme.MuzziQTheme
 import com.muzziq.mobile.playback.CastController
 import kotlinx.coroutines.delay
 
+private const val SPOTIFY_CALLBACK_SCHEME = "https"
+private const val SPOTIFY_CALLBACK_HOST = "muzziq.dj41ph4.ovh"
+private const val SPOTIFY_CALLBACK_PATH = "/spotify/callback"
+
 class MainActivity : AppCompatActivity() {
     private val vm: AppViewModel by viewModels()
 
@@ -87,6 +93,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        handleSpotifyCallbackIntent(intent)
         setContent {
             MuzziQTheme {
                 MuzziQApp(
@@ -94,6 +101,25 @@ class MainActivity : AppCompatActivity() {
                     onRequestAudioPermission = { requestAudioPermission.launch(audioPermission()) },
                 )
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleSpotifyCallbackIntent(intent)
+    }
+
+    /** Le domaine HTTPS est vérifié par Android via assetlinks.json. Aucun schéma
+     * propriétaire : Chrome revient naturellement à l'app après Spotify. */
+    private fun handleSpotifyCallbackIntent(intent: Intent) {
+        val data: Uri = intent.data ?: return
+        if (
+            data.scheme == SPOTIFY_CALLBACK_SCHEME &&
+            data.host == SPOTIFY_CALLBACK_HOST &&
+            data.path == SPOTIFY_CALLBACK_PATH
+        ) {
+            vm.handleSpotifyCallback(data)
         }
     }
 
@@ -447,7 +473,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                         spotifyError = spotifyError,
                         onConnectSpotify = {
                             // Chrome/Custom Tab sécurisé (jamais une WebView maison) —
-                            // Spotify revient sur le port loopback temporaire de MuzziQ.
+                            // Spotify revient via l'App Link HTTPS vérifié de MuzziQ.
                             val uri = vm.spotifyLoginUri()
                             if (uri != null) {
                                 CustomTabsIntent.Builder().build().launchUrl(context, uri)

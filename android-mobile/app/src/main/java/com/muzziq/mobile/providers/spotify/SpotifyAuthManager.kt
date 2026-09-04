@@ -26,10 +26,9 @@ import java.security.SecureRandom
  * public de MuzziQ sans demande d'extension "Quota Extension" à Spotify.
  * Documenté ici plutôt que découvert en silence à l'usage.
  *
- * Le retour utilise un port loopback éphémère (127.0.0.1) écouté par MuzziQ
- * pendant la connexion. Chrome peut donc afficher la vraie page Spotify puis
- * revenir automatiquement dans l'application sans serveur MuzziQ, sans WebView
- * et sans intent-filter/deep link propriétaire.
+ * Le retour utilise un App Link HTTPS vérifié sur le domaine officiel MuzziQ.
+ * Chrome affiche donc la vraie page Spotify puis rend automatiquement la main à
+ * l'application, sans WebView ni saisie d'URL par l'utilisateur.
  */
 class SpotifyAuthManager(
     private val credentialStore: SpotifyCredentialStore,
@@ -55,24 +54,24 @@ class SpotifyAuthManager(
     /** URL à ouvrir dans un onglet Custom Tabs/navigateur (jamais une WebView pour un
      * login OAuth tiers — règle générale de sécurité, l'utilisateur doit voir la vraie
      * barre d'adresse accounts.spotify.com, pas une WebView que l'app contrôle). */
-    fun buildAuthorizationUri(codeChallenge: String, state: String, redirectUri: String): Uri =
+    fun buildAuthorizationUri(codeChallenge: String, state: String): Uri =
         Uri.parse("https://accounts.spotify.com/authorize").buildUpon()
             .appendQueryParameter("client_id", BuildConfig.SPOTIFY_CLIENT_ID)
             .appendQueryParameter("response_type", "code")
-            .appendQueryParameter("redirect_uri", redirectUri)
+            .appendQueryParameter("redirect_uri", REDIRECT_URI)
             .appendQueryParameter("code_challenge_method", "S256")
             .appendQueryParameter("code_challenge", codeChallenge)
             .appendQueryParameter("state", state)
             .appendQueryParameter("scope", SCOPES)
             .build()
 
-    /** Échange le `code` reçu sur le redirect URI loopback contre les jetons réels, à partir du
+    /** Échange le `code` reçu sur l'App Link HTTPS contre les jetons réels, à partir du
      * même `codeVerifier` que celui utilisé pour construire l'URL d'autorisation. */
-    suspend fun exchangeCode(code: String, codeVerifier: String, redirectUri: String): Result<SpotifyTokens> = runCatching {
+    suspend fun exchangeCode(code: String, codeVerifier: String): Result<SpotifyTokens> = runCatching {
         val res = SpotifyApiClientFactory.accounts.exchangeCode(
             grantType = "authorization_code",
             code = code,
-            redirectUri = redirectUri,
+            redirectUri = REDIRECT_URI,
             clientId = BuildConfig.SPOTIFY_CLIENT_ID,
             codeVerifier = codeVerifier,
         )
@@ -130,6 +129,11 @@ class SpotifyAuthManager(
         Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
 
     companion object {
+        /** URL HTTPS déclarée dans le dashboard Spotify et associée à l'application Android
+         * par public/.well-known/assetlinks.json. Cette chaîne doit correspondre exactement
+         * à la valeur enregistrée chez Spotify, y compris le chemin. */
+        const val REDIRECT_URI = "https://muzziq.dj41ph4.ovh/spotify/callback"
+
         /** Lecture + écritures déclenchées explicitement depuis les réglages ou les
          * playlists. Spotify ne donne toujours pas de droit de télécharger ses flux. */
         const val SCOPES = "user-read-private user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private"

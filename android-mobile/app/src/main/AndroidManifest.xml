@@ -42,6 +42,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Retour Spotify HTTPS. Android vérifie l'association du domaine grâce à
+                 https://muzziq.dj41ph4.ovh/.well-known/assetlinks.json avant d'ouvrir
+                 ce lien dans MuzziQ. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="muzziq.dj41ph4.ovh"
+                    android:pathPrefix="/spotify/callback" />
+            </intent-filter>
+
         </activity>
 
         <!-- Lecteur système : MediaSession + MediaLibraryService (Android Auto, §56.2). -->
