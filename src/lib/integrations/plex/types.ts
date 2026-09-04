@@ -43,3 +43,12 @@ export interface PlexRawTrack {
   addedAt?: number;
   Media?: { Part?: { file?: string }[] }[];
 }
+
+/** Métadonnées d'une playlist Plex audio. Elles servent uniquement à importer
+ * la liste de titres : aucun URI de lecture Plex n'est conservé ou exposé. */
+export interface PlexAudioPlaylist {
+  ratingKey: string;
+  title: string;
+  leafCount?: number;
+  updatedAt?: number;
+}

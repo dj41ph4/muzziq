@@ -42,6 +42,8 @@ export default function PlexSettingsPage() {
 
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; summary: string } | null>(null);
+  const [syncingPlaylists, setSyncingPlaylists] = useState(false);
+  const [playlistResult, setPlaylistResult] = useState<{ ok: boolean; summary: string } | null>(null);
   const [syncingHistory, setSyncingHistory] = useState(false);
   const [historyResult, setHistoryResult] = useState<{ ok: boolean; summary: string } | null>(null);
 
@@ -186,6 +188,26 @@ export default function PlexSettingsPage() {
       setSyncResult({ ok: false, summary: e instanceof Error ? e.message : "Échec de synchronisation" });
     } finally {
       setSyncing(false);
+    }
+  }
+
+  /** Plex n'est ici qu'une source de listes : aucun appel de streaming Plex ne
+   * part de ce bouton. Les playlists sont importées sous le préfixe « Plex · »
+   * afin de ne jamais écraser une playlist MuzziQ du même nom. */
+  async function runPlaylistSync() {
+    setSyncingPlaylists(true);
+    setPlaylistResult(null);
+    try {
+      const res = await post<{ ok: boolean; playlistsSeen: number; playlistsCreated: number; tracksSeen: number; tracksAdded: number; recordingsCreated: number; skipped: number; errors: string[] }>(
+        "/api/integrations/plex/sync/playlists"
+      );
+      const summary = `${res.playlistsSeen} playlists — ${res.tracksSeen} titres vus, ${res.tracksAdded} ajoutés, ${res.recordingsCreated} nouveaux`;
+      setPlaylistResult({ ok: res.ok, summary: res.errors.length ? `${summary} · ${res.errors[0]}` : summary });
+      mutate();
+    } catch (e) {
+      setPlaylistResult({ ok: false, summary: e instanceof Error ? e.message : "Échec de synchronisation des playlists" });
+    } finally {
+      setSyncingPlaylists(false);
     }
   }
 
@@ -410,6 +432,29 @@ export default function PlexSettingsPage() {
             {data.lastLibrarySync && !syncResult && (
               <p className="text-xs text-[var(--ink-dim)]">
                 Dernier sync : {new Date(data.lastLibrarySync.at).toLocaleString("fr-FR")} — {data.lastLibrarySync.summary}
+              </p>
+            )}
+
+            <button
+              onClick={runPlaylistSync}
+              disabled={syncingPlaylists}
+              className="flex items-center justify-center gap-2 rounded-full border border-white/15 px-4 py-2.5 text-[13px] font-bold text-[var(--ink-soft)] transition-colors hover:border-[var(--brand)]/50 hover:text-[var(--brand)] disabled:opacity-40"
+            >
+              <RefreshCw size={14} className={syncingPlaylists ? "animate-spin" : ""} />
+              {syncingPlaylists ? "Import des playlists…" : "Importer les playlists Plex"}
+            </button>
+            <p className="text-xs text-[var(--ink-dim)]">
+              Métadonnées uniquement : MuzziQ importe les titres dans des playlists « Plex · … » et ne lit jamais la musique depuis Plex.
+            </p>
+            {playlistResult && (
+              <div className={`flex items-center gap-1.5 text-xs ${playlistResult.ok ? "text-[var(--brand)]" : "text-red-400"}`}>
+                {playlistResult.ok ? <CheckCircle2 size={12} /> : <XCircle size={12} />}
+                {playlistResult.summary}
+              </div>
+            )}
+            {data.lastPlaylistSync && !playlistResult && (
+              <p className="text-xs text-[var(--ink-dim)]">
+                Dernier import de playlists : {new Date(data.lastPlaylistSync.at).toLocaleString("fr-FR")} — {data.lastPlaylistSync.summary}
               </p>
             )}
 

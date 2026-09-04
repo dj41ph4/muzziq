@@ -39,6 +39,7 @@ export interface PlexConfig {
   pathMappings: PlexPathMapping[];
 
   lastLibrarySync?: PlexSyncReport;
+  lastPlaylistSync?: PlexSyncReport;
   /** Horodatage (secondes unix) du dernier événement d'historique importé — sert de curseur incrémental. */
   lastHistoryWatermark?: number;
   lastHistorySync?: PlexSyncReport;

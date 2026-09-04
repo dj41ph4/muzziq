@@ -1,6 +1,6 @@
 import { safePlexUrl } from "./safeUrl";
 import type { PlexConfig } from "./store";
-import type { PlexAccount, PlexRawTrack, PlexSection, PlexServerOption } from "./types";
+import type { PlexAccount, PlexAudioPlaylist, PlexRawTrack, PlexSection, PlexServerOption } from "./types";
 
 /**
  * Client Plex (plan §53) — jamais un identifiant MuzziQ canonique dérivé d'un
@@ -259,6 +259,57 @@ export async function getSectionTracks(
     }
     start += page.length;
     if (page.length === 0 || start >= total) break;
+  }
+  return out;
+}
+
+/** Playlists audio du compte Plex. Cette lecture ne demande jamais d'URL de
+ * média et ne transforme pas Plex en source de playback MuzziQ. */
+export async function getAudioPlaylists(
+  config: Pick<PlexConfig, "serverUrl" | "token" | "clientId">
+): Promise<PlexAudioPlaylist[]> {
+  const origin = plexOrigin(config);
+  if (!origin || !config.token) return [];
+  try {
+    const url = new URL(`${origin}/playlists`);
+    url.searchParams.set("playlistType", "audio");
+    const res = await fetchWithRetry(url.toString(), { headers: serverHeaders(config.clientId, config.token) });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.MediaContainer?.Metadata ?? [])
+      .filter((p: PlexAudioPlaylist) => !!p.ratingKey && !!p.title)
+      .map((p: PlexAudioPlaylist) => ({ ratingKey: String(p.ratingKey), title: p.title, leafCount: p.leafCount, updatedAt: p.updatedAt }));
+  } catch {
+    return [];
+  }
+}
+
+/** Toutes les pistes d'une playlist Plex, paginées. Des métadonnées uniquement :
+ * la classe appelante ne reçoit ni Media URL ni autorisation de lecture. */
+export async function getPlaylistTracks(
+  config: Pick<PlexConfig, "serverUrl" | "token" | "clientId">,
+  playlistId: string
+): Promise<PlexRawTrack[]> {
+  const origin = plexOrigin(config);
+  if (!origin || !config.token) return [];
+  const out: PlexRawTrack[] = [];
+  const pageSize = 200;
+  let start = 0;
+  for (;;) {
+    try {
+      const res = await fetchWithRetry(`${origin}/playlists/${encodeURIComponent(playlistId)}/items`, {
+        headers: { ...serverHeaders(config.clientId, config.token), "X-Plex-Container-Start": String(start), "X-Plex-Container-Size": String(pageSize) },
+      });
+      if (!res.ok) break;
+      const data = await res.json();
+      const page: PlexRawTrack[] = data?.MediaContainer?.Metadata ?? [];
+      out.push(...page);
+      const total = data?.MediaContainer?.totalSize ?? page.length;
+      start += page.length;
+      if (page.length === 0 || start >= total) break;
+    } catch {
+      break;
+    }
   }
   return out;
 }
