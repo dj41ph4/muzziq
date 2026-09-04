@@ -24,6 +24,7 @@ class YouTubeMusicStandaloneSource(context: Context) {
     private val selectedStreams = ConcurrentHashMap<String, ResolvedOnlineStream>()
     private val rejectedProfiles = ConcurrentHashMap<String, MutableSet<String>>()
     private val streamHeadersByUrl = ConcurrentHashMap<String, Map<String, String>>()
+    @Volatile private var activeStreamHeaders: Map<String, String> = emptyMap()
 
     suspend fun search(query: String): Result<List<Track>> = withContext(Dispatchers.IO) {
         if (query.isBlank()) return@withContext Result.success(emptyList())
@@ -62,6 +63,7 @@ class YouTubeMusicStandaloneSource(context: Context) {
             extracted.getOrNull()?.let { stream ->
                 selectedStreams[videoId] = stream
                 streamHeadersByUrl[stream.url] = stream.headers
+                activeStreamHeaders = stream.headers
                 return@withContext Result.success(stream.url)
             }
             lastError = extracted.exceptionOrNull()
@@ -105,6 +107,7 @@ class YouTubeMusicStandaloneSource(context: Context) {
             if (stream != null) {
                 selectedStreams[videoId] = stream.toOnlineStream()
                 streamHeadersByUrl[stream.url] = stream.profile.streamHeaders()
+                activeStreamHeaders = stream.profile.streamHeaders()
                 return@withContext Result.success(stream.url)
             }
             lastError = result.exceptionOrNull()
@@ -117,6 +120,7 @@ class YouTubeMusicStandaloneSource(context: Context) {
     fun markCurrentProfileRejected(videoId: String) {
         val stream = selectedStreams.remove(videoId) ?: return
         streamHeadersByUrl.remove(stream.url)
+        if (activeStreamHeaders == stream.headers) activeStreamHeaders = emptyMap()
         val key = if (stream.profileKey.startsWith("extractor:")) "extractor" else stream.profileKey
         rejectedProfiles.getOrPut(videoId) { ConcurrentHashMap.newKeySet() }.add(key)
     }
@@ -124,7 +128,11 @@ class YouTubeMusicStandaloneSource(context: Context) {
     fun selectedMimeType(videoId: String): String? = selectedStreams[videoId]?.mimeType
 
     /** En-têtes du profil ayant effectivement validé cette URL, consommés par Media3. */
-    fun streamHeaders(url: String): Map<String, String> = streamHeadersByUrl[url].orEmpty()
+    /** Media3 peut normaliser une URL signée lors de sa conversion en Uri. La
+     * correspondance exacte reste préférable, mais le lecteur n'a qu'un flux
+     * en ligne actif : les en-têtes actifs sont le repli sûr dans ce cas. */
+    fun streamHeaders(url: String): Map<String, String> =
+        streamHeadersByUrl[url] ?: activeStreamHeaders
 
     /** Une lecture de deux octets avec Range valide l'URL signée et le profil avant
      * de déléguer au player. Une 200 est aussi acceptable : certains CDN ignorent
