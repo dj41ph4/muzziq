@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +74,7 @@ fun SettingsScreen(
     spotifyError: String?,
     onConnectSpotify: () -> Unit,
     onDisconnectSpotify: () -> Unit,
+    onSyncSpotifyFavorites: () -> Unit = {},
 ) {
     var showAddServer by remember { mutableStateOf(false) }
     var newServerUrl by remember { mutableStateOf("") }
@@ -126,10 +128,8 @@ fun SettingsScreen(
                 if (serverError != null) Text(serverError, color = Color(0xFFFF7F88), fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp))
             }
 
-            if (spotifyAccount != SpotifyAccountUiState.NotConfigured) {
-                SettingsSectionLabel("COMPTES")
-                SpotifyAccountCard(spotifyAccount, spotifyBusy, spotifyError, onConnectSpotify, onDisconnectSpotify)
-            }
+            SettingsSectionLabel("COMPTES")
+            SpotifyAccountCard(spotifyAccount, spotifyBusy, spotifyError, onConnectSpotify, onDisconnectSpotify, onSyncSpotifyFavorites)
 
             Text("MuzziQ · v$appVersion", color = MuzziQColors.TextFaint, fontSize = 11.sp, modifier = Modifier.padding(top = 12.dp, bottom = 24.dp))
         }
@@ -152,7 +152,7 @@ private fun ServerRow(url: String, active: Boolean, onSelect: () -> Unit, onRemo
 }
 
 @Composable
-private fun SpotifyAccountCard(account: SpotifyAccountUiState, busy: Boolean, error: String?, onConnect: () -> Unit, onDisconnect: () -> Unit) {
+private fun SpotifyAccountCard(account: SpotifyAccountUiState, busy: Boolean, error: String?, onConnect: () -> Unit, onDisconnect: () -> Unit, onSyncFavorites: () -> Unit) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MuzziQColors.Surface.copy(alpha = 0.94f)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val connected = account as? SpotifyAccountUiState.Connected
@@ -160,12 +160,27 @@ private fun SpotifyAccountCard(account: SpotifyAccountUiState, busy: Boolean, er
             else Box(Modifier.size(42.dp).clip(CircleShape).background(MuzziQColors.SurfaceRaised), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.MusicNote, null, tint = MuzziQColors.TextMuted) }
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 Text("Spotify", color = MuzziQColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text(if (connected != null) connected.displayName ?: "Connecté" else "Bibliothèque en lecture seule", color = MuzziQColors.TextMuted, fontSize = 12.sp)
+                Text(
+                    when {
+                        connected != null -> connected.displayName ?: "Connecté"
+                        account is SpotifyAccountUiState.NotConfigured -> "Configuration développeur requise"
+                        else -> "Prêt à connecter ta bibliothèque"
+                    },
+                    color = MuzziQColors.TextMuted,
+                    fontSize = 12.sp,
+                )
             }
             if (connected != null) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MuzziQColors.Brand)
         }
-        if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = MuzziQColors.Brand, strokeWidth = 2.dp)
+        if (account is SpotifyAccountUiState.NotConfigured) {
+            Text("Ajoute un Client ID Spotify dans spotify.properties puis reconstruis l'app. MuzziQ synchronisera les titres likés et les playlists par métadonnées, sans télécharger les flux Spotify.", color = MuzziQColors.TextMuted, fontSize = 12.sp, lineHeight = 17.sp)
+        } else if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = MuzziQColors.Brand, strokeWidth = 2.dp)
         else Button(onClick = if (account is SpotifyAccountUiState.Connected) onDisconnect else onConnect, modifier = Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.SurfaceRaised, contentColor = MuzziQColors.TextPrimary)) { Text(if (account is SpotifyAccountUiState.Connected) "Déconnecter" else "Connecter", fontWeight = FontWeight.SemiBold) }
+        if (account is SpotifyAccountUiState.Connected && !busy) {
+            TextButton(onClick = onSyncFavorites, modifier = Modifier.fillMaxWidth()) {
+                Text("Synchroniser les titres likés", color = MuzziQColors.Brand, fontWeight = FontWeight.Bold)
+            }
+        }
         if (error != null) Text(error, color = Color(0xFFFF7F88), fontSize = 12.sp)
     }
 }

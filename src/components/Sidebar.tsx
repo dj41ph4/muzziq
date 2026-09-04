@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
-import { Home, Search, Library, ListMusic, Settings } from "lucide-react";
+import { Home, Search, Library, ListMusic, Settings, Heart } from "lucide-react";
 import { Logo } from "./Logo";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/home", label: "Accueil", Icon: Home },
   { href: "/search", label: "Recherche", Icon: Search },
   { href: "/library", label: "Bibliothèque", Icon: Library },
+  { href: "/favorites", label: "Titres likés", Icon: Heart },
 ];
 
 interface Playlist {

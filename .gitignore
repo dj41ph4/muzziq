@@ -1,5 +1,6 @@
 # dependencies
 /node_modules
+/.pnpm-store/
 /engine/node_modules
 /resolver/node_modules
 
@@ -19,6 +20,7 @@ next-env.d.ts
 # Android local build state and signing configuration
 /android-mobile/.gradle/
 /android-mobile/app/build/
+/android-mobile/build/
 /android-mobile/local.properties
 /android-mobile/keystore.properties
 /android-mobile/spotify.properties

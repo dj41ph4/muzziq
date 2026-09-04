@@ -13,6 +13,8 @@ const FILE = dataFile("settings.json");
 export interface MuzziqSettings {
   serverName: string;
   musicDir: string | null;
+  /** Affiche les morceaux provenant du dossier scanné dans les recommandations d'accueil. */
+  showLocalFiles: boolean;
   /** Erreur persistée si le dernier `musicDir` enregistré était inaccessible — jamais un save silencieusement optimiste (plan §105 recherche Movviz). */
   musicDirError: string | null;
 }
@@ -20,6 +22,7 @@ export interface MuzziqSettings {
 const DEFAULT: MuzziqSettings = {
   serverName: "MuzziQ",
   musicDir: null,
+  showLocalFiles: false,
   musicDirError: null,
 };
 

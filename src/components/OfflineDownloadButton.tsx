@@ -7,10 +7,14 @@ import { Check, Download, Loader2, X } from "lucide-react";
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export interface OfflineTrackInfo {
-  recordingId: string;
+  recordingId?: string;
+  provider?: string;
+  providerTrackId?: string;
   title: string;
   artist: string;
   album?: string;
+  durationSeconds?: number;
+  thumbnailUrl?: string;
 }
 
 interface OfflineDownloadEntry {
@@ -28,8 +32,10 @@ interface OfflineDownloadEntry {
 export function OfflineDownloadButton({ track, size = 16 }: { track: OfflineTrackInfo; size?: number }) {
   const { data, mutate } = useSWR<{ downloads: OfflineDownloadEntry[] }>("/api/offline", fetcher, { refreshInterval: 5000 });
   const [pending, setPending] = useState(false);
+  const [resolvedRecordingId, setResolvedRecordingId] = useState<string | undefined>(track.recordingId);
 
-  const entry = data?.downloads?.find((d) => d.recordingId === track.recordingId);
+  const effectiveRecordingId = resolvedRecordingId ?? track.recordingId;
+  const entry = data?.downloads?.find((d) => d.recordingId === effectiveRecordingId);
   const busy = pending || entry?.state === "QUEUED" || entry?.state === "DOWNLOADING";
   const completed = entry?.state === "COMPLETED";
   const failed = entry?.state === "FAILED";
@@ -39,11 +45,22 @@ export function OfflineDownloadButton({ track, size = 16 }: { track: OfflineTrac
     if (busy || completed) return;
     setPending(true);
     try {
-      await fetch("/api/offline", {
+      const res = await fetch("/api/offline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recordingId: track.recordingId }),
+        body: JSON.stringify({
+          recordingId: effectiveRecordingId,
+          provider: track.provider,
+          providerTrackId: track.providerTrackId,
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          durationSeconds: track.durationSeconds,
+          thumbnailUrl: track.thumbnailUrl,
+        }),
       });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.recordingId) setResolvedRecordingId(body.recordingId);
       mutate();
     } finally {
       setPending(false);

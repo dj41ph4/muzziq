@@ -1,15 +1,18 @@
 import { listRecentEvents, type PlaybackEvent } from "@/lib/history/playbackEventsStore";
 import { listRecordings, type Recording } from "@/lib/library/recordingsStore";
+import { listFavorites } from "@/lib/library/favoritesStore";
 import { listLibraryItems } from "@/lib/library/libraryItemsStore";
 import { getTopArtistAffinities } from "@/lib/userContext/preferences";
 import { DEFAULT_USER_ID } from "@/lib/userContext/types";
+import { getSettings } from "@/lib/settings/store";
+import { findOrCreateRecordingFromExternal } from "@/lib/library/recordingResolution";
+import { youtubeMusicProvider } from "@/providers/youtube-music";
 
 /**
- * DeterministicRecommendationEngine (plan §44) — pas de couche IA ici,
- * uniquement des règles explicites sur des données réelles (historique,
- * bibliothèque). La couche IA (§44 AIRecommendationLayer) reste hors scope
- * de cette session (nécessite une clé API que je n'ai pas) ; ce moteur
- * déterministe fonctionne indépendamment d'elle, comme prévu par le plan.
+ * Moteur de recommandation déterministe : aucune playlist statique et aucun
+ * titre inventé. Les candidats viennent du provider, puis sont classés à
+ * partir des signaux réellement enregistrés par MuzziQ (écoute, completion,
+ * skip et favoris). Le résultat est explicable et testable sans modèle IA.
  */
 
 export interface HomeRow {
@@ -18,76 +21,149 @@ export interface HomeRow {
   recordings: Recording[];
 }
 
-/** Dédoublonne une liste de recordings en conservant le premier ordre d'apparition. */
+interface ArtistSignal {
+  artist: string;
+  score: number;
+}
+
+let trendsCache: { expiresAt: number; rows: HomeRow[] } | null = null;
+
 function dedupe(recordings: Recording[]): Recording[] {
   const seen = new Set<string>();
   return recordings.filter((r) => (seen.has(r.id) ? false : (seen.add(r.id), true)));
 }
 
-/** Continuer l'écoute (§46) — derniers morceaux joués, plus récent d'abord. */
+function recentEvents(): PlaybackEvent[] {
+  return listRecentEvents(500);
+}
+
+function withoutHiddenLocalFiles(recordings: Recording[]): Recording[] {
+  if (getSettings().showLocalFiles) return recordings;
+  const localIds = new Set(recentEvents().filter((event) => event.source === "LOCAL").map((event) => event.recordingId));
+  return recordings.filter((recording) => !localIds.has(recording.id));
+}
+
+/** Derniers morceaux réellement démarrés, dédupliqués et filtrés par préférence locale. */
 export function getContinueListening(limit = 10): Recording[] {
-  const events = listRecentEvents(200).filter((e: PlaybackEvent) => e.type === "PLAY_START");
-  const recordings = listRecordings();
-  const ordered = events.map((e) => recordings.find((r) => r.id === e.recordingId)).filter((r): r is Recording => !!r);
-  return dedupe(ordered).slice(0, limit);
+  const events = recentEvents().filter((event) => event.type === "PLAY_START");
+  const recordings = new Map(listRecordings().map((recording) => [recording.id, recording]));
+  return withoutHiddenLocalFiles(dedupe(events.map((event) => recordings.get(event.recordingId)).filter((r): r is Recording => !!r))).slice(0, limit);
 }
 
-/** Albums récemment ajoutés (§46) — via LibraryItem.addedAt. */
+/** Conservé pour les écrans de bibliothèque, mais volontairement absent de l'accueil. */
 export function getRecentlyAdded(limit = 10): Recording[] {
-  const items = [...listLibraryItems()].sort((a, b) => b.addedAt.localeCompare(a.addedAt));
-  const recordings = listRecordings();
-  const ordered = items.map((i) => recordings.find((r) => r.id === i.recordingId)).filter((r): r is Recording => !!r);
-  return dedupe(ordered).slice(0, limit);
+  const recordings = new Map(listRecordings().map((recording) => [recording.id, recording]));
+  return listLibraryItems()
+    .sort((a, b) => b.addedAt.localeCompare(a.addedAt))
+    .map((item) => recordings.get(item.recordingId))
+    .filter((r): r is Recording => !!r)
+    .filter((recording, index, all) => all.findIndex((item) => item.id === recording.id) === index)
+    .slice(0, limit);
 }
 
-/**
- * "Parce que vous aimez X" (§46) — règle simple et explicable : l'artiste le
- * plus écouté récemment, puis d'autres morceaux du même artiste déjà connus
- * de MuzziQ (catalogue) mais pas dans les derniers écoutés. Pas de similarité
- * inter-artiste ni de scoring de goût (§43 UserTaste) tant que le volume réel
- * de données ne le justifie pas — resterait un chiffre inventé sur un
- * historique quasi vide.
- */
-export async function getBecauseYouLike(limit = 10): Promise<{ artist: string; recordings: Recording[] } | null> {
-  const recordings = listRecordings();
+function getLocalArtistSignals(): ArtistSignal[] {
+  const events = recentEvents();
+  const recordings = new Map(listRecordings().map((recording) => [recording.id, recording]));
+  const scores = new Map<string, ArtistSignal>();
+  const now = Date.now();
 
-  // Priorité au Context Engine SQL (plan §45, affinité pondérée par
-  // confiance — un skip peut faire redescendre un artiste, pas juste
-  // compter des lectures brutes) ; repli sur le comptage JSON si la DB
-  // contexte est indisponible/désactivée (MUZZIQ_CONTEXT_ENGINE_DISABLED)
-  // ou encore vide (tout juste démarré, aucune preuve accumulée).
-  const topAffinities = await getTopArtistAffinities(DEFAULT_USER_ID, 1);
-  let topArtist = topAffinities[0]?.artist;
-
-  const events = listRecentEvents(200).filter((e) => e.type === "PLAY_START");
-  const playedRecordings = events.map((e) => recordings.find((r) => r.id === e.recordingId)).filter((r): r is Recording => !!r);
-
-  if (!topArtist) {
-    if (playedRecordings.length === 0) return null;
-    const artistCounts = new Map<string, number>();
-    for (const r of playedRecordings) artistCounts.set(r.artist, (artistCounts.get(r.artist) ?? 0) + 1);
-    topArtist = [...artistCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  for (const event of events) {
+    const recording = recordings.get(event.recordingId);
+    if (!recording) continue;
+    const ageDays = Math.max(0, (now - Date.parse(event.at)) / 86_400_000);
+    const recency = Math.exp(-ageDays / 21);
+    const signal = event.type === "PLAY_COMPLETE" ? 4 : event.type === "SKIP" ? -2.5 : 1;
+    const key = recording.artist.trim().toLowerCase();
+    const current = scores.get(key) ?? { artist: recording.artist, score: 0 };
+    current.score += signal * recency;
+    scores.set(key, current);
   }
 
-  const recentlyPlayedIds = new Set(playedRecordings.slice(0, 5).map((r) => r.id));
-  const others = recordings.filter((r) => r.artist === topArtist && !recentlyPlayedIds.has(r.id));
+  for (const favorite of listFavorites()) {
+    const recording = recordings.get(favorite.recordingId);
+    if (!recording) continue;
+    const key = recording.artist.trim().toLowerCase();
+    const current = scores.get(key) ?? { artist: recording.artist, score: 0 };
+    current.score += 3;
+    scores.set(key, current);
+  }
 
-  return { artist: topArtist, recordings: dedupe(others).slice(0, limit) };
+  return [...scores.values()].filter((signal) => signal.score > 0).sort((a, b) => b.score - a.score).slice(0, 5);
+}
+
+async function getArtistSignals(): Promise<ArtistSignal[]> {
+  const merged = new Map<string, ArtistSignal>();
+  for (const signal of getLocalArtistSignals()) merged.set(signal.artist.toLowerCase(), signal);
+
+  const affinities = await getTopArtistAffinities(DEFAULT_USER_ID, 12);
+  for (const affinity of affinities) {
+    const key = affinity.artist.toLowerCase();
+    const current = merged.get(key);
+    merged.set(key, {
+      artist: affinity.artist,
+      score: (current?.score ?? 0) + affinity.affinity * (1 + affinity.confidence) * 5,
+    });
+  }
+
+  return [...merged.values()].filter((signal) => signal.score > 0).sort((a, b) => b.score - a.score).slice(0, 5);
+}
+
+async function searchShelf(query: string, id: string, title: string, limit = 10): Promise<HomeRow | null> {
+  try {
+    const result = await youtubeMusicProvider.search({ text: query, scope: "songs" });
+    const recordings = dedupe(result.tracks.map((track) => findOrCreateRecordingFromExternal(track))).slice(0, limit);
+    return recordings.length > 0 ? { id, title, recordings } : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getForYou(limit = 12): Promise<HomeRow | null> {
+  const signals = await getArtistSignals();
+  if (signals.length === 0) return null;
+
+  const playedIds = new Set(recentEvents().filter((event) => event.type === "PLAY_START").map((event) => event.recordingId));
+  const candidates = new Map<string, { recording: Recording; score: number }>();
+
+  // On interroge plusieurs artistes réellement appréciés, puis on fusionne
+  // les résultats en conservant un score de préférence par candidat.
+  for (const signal of signals) {
+    try {
+      const result = await youtubeMusicProvider.search({ text: signal.artist, scope: "songs" });
+      for (const track of result.tracks) {
+        const recording = findOrCreateRecordingFromExternal(track);
+        if (playedIds.has(recording.id)) continue;
+        const existing = candidates.get(recording.id);
+        candidates.set(recording.id, { recording, score: (existing?.score ?? 0) + signal.score });
+      }
+    } catch {
+      // Une source indisponible ne doit pas effacer les autres signaux valides.
+    }
+  }
+
+  const ranked = withoutHiddenLocalFiles([...candidates.values()].sort((a, b) => b.score - a.score).map((candidate) => candidate.recording));
+  return ranked.length > 0 ? { id: "for-you", title: "Pour toi", recordings: ranked.slice(0, limit) } : null;
 }
 
 export async function getHomeRows(): Promise<HomeRow[]> {
   const rows: HomeRow[] = [];
-
   const continueListening = getContinueListening();
   if (continueListening.length > 0) rows.push({ id: "continue", title: "Continuer l'écoute", recordings: continueListening });
 
-  const recentlyAdded = getRecentlyAdded();
-  if (recentlyAdded.length > 0) rows.push({ id: "recent", title: "Récemment ajoutés", recordings: recentlyAdded });
+  const forYou = await getForYou();
+  if (forYou) rows.push(forYou);
 
-  const because = await getBecauseYouLike();
-  if (because && because.recordings.length > 0) {
-    rows.push({ id: "because", title: `Parce que vous aimez ${because.artist}`, recordings: because.recordings });
+  // Cette étagère est volontairement distincte de "Pour toi" : elle vient
+  // d'une recherche provider en direct, donc ce sont des tendances externes,
+  // pas une fausse liste locale présentée comme personnalisée.
+  if (!trendsCache || trendsCache.expiresAt < Date.now()) {
+    const year = new Date().getFullYear();
+    const [trending, newReleases] = await Promise.all([
+      searchShelf(`Top hits ${year}`, "trending", "Hits du moment"),
+      searchShelf(`Nouveautés musique ${year}`, "new-releases", "Nouveautés à découvrir"),
+    ]);
+    trendsCache = { expiresAt: Date.now() + 10 * 60_000, rows: [trending, newReleases].filter((row): row is HomeRow => row !== null) };
   }
-
+  rows.push(...trendsCache.rows);
   return rows;
 }

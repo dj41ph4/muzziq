@@ -259,7 +259,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleFavorite(track: Track) {
         viewModelScope.launch {
             val isFav = favorites.isFavorite(track.id)
+            val spotifyId = (track.source as? TrackSource.Spotify)?.spotifyTrackId
+            if (spotifyId != null && _spotifyAccount.value is SpotifyAccountUiState.Connected) {
+                val result = if (isFav) spotifyProvider.removeTracks(listOf(spotifyId)) else spotifyProvider.saveTracks(listOf(spotifyId))
+                if (result.isFailure) {
+                    _error.value = "Spotify n'a pas pu mettre à jour ce favori : ${result.exceptionOrNull()?.message}"
+                    return@launch
+                }
+            }
             favorites.setFavorite(track.id, !isFav)
+        }
+    }
+
+    /** Synchronisation additive et explicite : les titres likés Spotify deviennent
+     * des titres likés MuzziQ. Les favoris locaux non identifiés Spotify ne sont
+     * jamais envoyés au hasard vers le catalogue Spotify. Pour les titres Spotify,
+     * le bouton cœur reste bidirectionnel en temps réel. */
+    fun syncSpotifyFavorites() {
+        if (_spotifyAccount.value !is SpotifyAccountUiState.Connected || _spotifyBusy.value) return
+        viewModelScope.launch {
+            _spotifyBusy.value = true
+            spotifyProvider.library()
+                .onSuccess { remote ->
+                    remote.forEach { track -> favorites.setFavorite(track.id, true) }
+                    _spotifyError.value = null
+                    refreshLibrary()
+                }
+                .onFailure { _spotifyError.value = "Synchronisation Spotify échouée : ${it.message}" }
+            _spotifyBusy.value = false
         }
     }
 

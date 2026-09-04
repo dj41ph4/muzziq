@@ -6,6 +6,8 @@ import { Search as SearchIcon, Plus, Check, Music2, Play, User, Disc3, X } from 
 import type { ExternalTrack } from "@/lib/contracts/music";
 import { usePlayer, type PlayableTrack } from "@/components/PlayerContext";
 import { TopBar } from "@/components/TopBar";
+import { OfflineDownloadButton } from "@/components/OfflineDownloadButton";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 type EnrichedTrack = ExternalTrack & { localMatch?: { fileId: string; confidence: number } };
 
@@ -284,6 +286,19 @@ export default function SearchPage() {
                   <span className="hidden font-mono text-[11px] tabular-nums text-[var(--ink-dim)] sm:inline">
                     {formatDuration(t.durationSeconds)}
                   </span>
+                  <FavoriteButton track={externalPayload(t)} size={16} />
+                  <OfflineDownloadButton
+                    track={{
+                      provider: t.provider,
+                      providerTrackId: t.providerTrackId,
+                      title: t.title,
+                      artist: t.artist,
+                      album: t.album,
+                      durationSeconds: t.durationSeconds,
+                      thumbnailUrl: t.thumbnailUrl,
+                    }}
+                    size={15}
+                  />
                   <button
                     onClick={(e) => addToLibrary(e, t)}
                     disabled={addedIds.has(t.providerTrackId)}

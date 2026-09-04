@@ -76,19 +76,20 @@ function shuffled(indices: number[]): number[] {
   return arr;
 }
 
-async function recordPlayStartEvent(track: PlayableTrack) {
+async function recordPlaybackEvent(track: PlayableTrack, type: "PLAY_START" | "PLAY_COMPLETE" | "SKIP") {
   try {
     await fetch("/api/events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        recordingId: track.recordingId,
         provider: track.kind === "provider" ? "youtube-music" : "local",
         providerTrackId: track.id,
         title: track.title,
         artist: track.artist,
         album: track.album,
         durationSeconds: track.durationSeconds,
-        type: "PLAY_START",
+        type,
         source: track.kind === "provider" ? "PROVIDER" : "LOCAL",
       }),
     });
@@ -124,7 +125,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const loadTrack = useCallback((track: PlayableTrack) => {
     setState((s) => ({ ...s, track, isLoading: true, error: null, isPlaying: false, progress: 0, duration: 0 }));
-    recordPlayStartEvent(track);
+    recordPlaybackEvent(track, "PLAY_START");
 
     (async () => {
       let url: string;
@@ -164,9 +165,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   );
 
   const goTo = useCallback(
-    (delta: number) => {
+    (delta: number, recordSkip = true) => {
       const s = stateRef.current;
       if (s.queue.length === 0) return;
+      if (recordSkip && delta > 0 && s.track) recordPlaybackEvent(s.track, "SKIP");
       let newPos = s.pos + delta;
       if (newPos < 0) newPos = s.repeat === "all" ? s.order.length - 1 : 0;
       if (newPos >= s.order.length) {
@@ -292,7 +294,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             return;
           }
           setState((s) => ({ ...s, isPlaying: false }));
-          goTo(1);
+          goTo(1, false);
         }}
       />
     </PlayerContext.Provider>

@@ -42,7 +42,7 @@ import com.muzziq.mobile.ui.common.TrackRow
 import com.muzziq.mobile.ui.palette.rememberDominantColor
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
-private enum class LibraryView { TRACKS, ARTISTS, ALBUMS }
+private enum class LibraryView { FAVORITES, TRACKS, ARTISTS, ALBUMS }
 
 /**
  * Bibliothèque à plat + browse artiste/album (§17) — ce dernier ne couvre que
@@ -54,6 +54,7 @@ private enum class LibraryView { TRACKS, ARTISTS, ALBUMS }
 fun LibraryScreen(
     mode: AppMode,
     tracks: List<Track>,
+    favoriteTracks: List<Track> = emptyList(),
     artists: List<ArtistUi>,
     albums: List<AlbumUi>,
     browseTracks: List<Track>,
@@ -122,6 +123,7 @@ fun LibraryScreen(
                     items(LibraryView.entries.toList()) { v ->
                         MuzziQFilterChip(
                             label = when (v) {
+                                LibraryView.FAVORITES -> "Titres likés"
                                 LibraryView.TRACKS -> "Titres"
                                 LibraryView.ARTISTS -> "Artistes"
                                 LibraryView.ALBUMS -> "Albums"
@@ -133,6 +135,10 @@ fun LibraryScreen(
                 }
             }
             when (view) {
+                LibraryView.FAVORITES -> {
+                    if (favoriteTracks.isEmpty()) item { EmptyState("Aucun titre liké. Utilise le cœur depuis la lecture ou la recherche.") }
+                    items(favoriteTracks, key = { it.id }) { track -> TrackRow(track, onClick = { onTrackClick(track) }) }
+                }
                 LibraryView.TRACKS -> items(tracks, key = { it.id }) { track -> TrackRow(track, onClick = { onTrackClick(track) }) }
                 LibraryView.ARTISTS -> {
                     if (artists.isEmpty()) item { EmptyBrowseNotice(mode) }

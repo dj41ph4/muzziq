@@ -332,13 +332,14 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             homeRows = homeRows,
                             contentPadding = padding,
                             playlists = playlists,
-                            onTrackClick = { vm.playFrom(library, it) },
+                            onTrackClick = { vm.playFrom(homeRows.flatMap { row -> row.tracks }.ifEmpty { library }, it) },
                             onOpenPlaylist = { playlistId -> vm.openPlaylist(playlistId); tab = Tab.PLAYLISTS.ordinal },
                         )
                         Tab.SEARCH -> SearchScreen(s.mode, query, { query = it; vm.search(it) }, searchResults, padding) { vm.playFrom(searchResults, it) }
                         Tab.LIBRARY -> LibraryScreen(
                             mode = s.mode,
                             tracks = library,
+                            favoriteTracks = library.filter { it.id in favoriteIds },
                             artists = artists,
                             albums = albums,
                             browseTracks = browseTracks,
@@ -489,6 +490,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                             }
                         },
                         onDisconnectSpotify = { vm.disconnectSpotify() },
+                        onSyncSpotifyFavorites = { vm.syncSpotifyFavorites() },
                     )
                 }
             }

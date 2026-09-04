@@ -3,13 +3,14 @@
 import useSWR from "swr";
 import { useState } from "react";
 import Link from "next/link";
-import { RefreshCw, Music2, X, Clock, HardDrive, ListMusic, Download, DownloadCloud, Sparkles, Settings } from "lucide-react";
+import { RefreshCw, Music2, X, Clock, HardDrive, ListMusic, Download, DownloadCloud, Sparkles, Settings, Heart } from "lucide-react";
 import type { MediaFile } from "@/lib/library/mediaFilesStore";
 import { usePlayer, type PlayableTrack } from "@/components/PlayerContext";
 import { TopBar } from "@/components/TopBar";
 import { OfflineDownloadButton } from "@/components/OfflineDownloadButton";
 
 const SHORTCUTS = [
+  { href: "/favorites", label: "Titres likés", Icon: Heart },
   { href: "/playlists", label: "Playlists", Icon: ListMusic },
   { href: "/downloads", label: "Téléchargements", Icon: Download },
   { href: "/offline", label: "Hors ligne", Icon: DownloadCloud },

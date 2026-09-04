@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRecording } from "@/lib/library/recordingsStore";
+import { findOrCreateRecordingFromExternal } from "@/lib/library/recordingResolution";
 import { resolveRecordingPlayback } from "@/lib/library/recordingPlayback";
 import { getMediaFile } from "@/lib/library/mediaFilesStore";
 import { resolveYoutubeMusicPlayback } from "@/providers/youtube-music/playbackResolver";
@@ -30,6 +31,13 @@ export async function GET() {
 
 interface OfflineRequestBody {
   recordingId?: string;
+  provider?: string;
+  providerTrackId?: string;
+  title?: string;
+  artist?: string;
+  album?: string;
+  durationSeconds?: number;
+  thumbnailUrl?: string;
 }
 
 export async function POST(req: Request) {
@@ -38,7 +46,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "recordingId requis" }, { status: 400 });
   }
 
-  const recording = getRecording(body.recordingId);
+  const recording = body.recordingId
+    ? getRecording(body.recordingId)
+    : body.provider && body.providerTrackId && body.title && body.artist
+      ? findOrCreateRecordingFromExternal({
+          provider: body.provider,
+          providerTrackId: body.providerTrackId,
+          title: body.title,
+          artist: body.artist,
+          album: body.album,
+          durationSeconds: body.durationSeconds,
+          thumbnailUrl: body.thumbnailUrl,
+        })
+      : undefined;
   if (!recording) {
     return NextResponse.json({ error: "Recording introuvable" }, { status: 404 });
   }

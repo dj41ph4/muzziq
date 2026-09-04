@@ -50,7 +50,6 @@ import com.muzziq.mobile.ui.common.MuzziQTopBar
 import com.muzziq.mobile.ui.common.QuickTile
 import com.muzziq.mobile.ui.common.SectionTitle
 import com.muzziq.mobile.ui.common.SquareMediaCard
-import com.muzziq.mobile.ui.common.TrackRow
 import com.muzziq.mobile.ui.theme.MuzziQColors
 import java.time.LocalTime
 
@@ -66,7 +65,8 @@ fun HomeScreen(
 ) {
     val greeting = remember(mode) { greetingForNow() }
     val quickPlaylists = playlists.filter { it.provider != MusicProviderId.SPOTIFY }.take(6)
-    val featuredTrack = tracks.firstOrNull()
+    val discoveryTracks = homeRows.flatMap { it.tracks }
+    val featuredTrack = discoveryTracks.firstOrNull()
 
     MuzziQBackdrop(Modifier.fillMaxSize()) {
         LazyColumn(contentPadding = contentPadding) {
@@ -115,16 +115,13 @@ fun HomeScreen(
                         }
                     }
                 }
-            } else if (tracks.isEmpty()) {
+            } else {
                 item {
                     EmptyState(
-                        if (mode == AppMode.STANDALONE) "Aucun morceau trouvé sur l'appareil — vérifie la permission musique dans Réglages."
-                        else "Bibliothèque vide — ajoute des morceaux depuis la recherche.",
+                        if (mode == AppMode.STANDALONE) "Les recommandations apparaîtront après quelques écoutes. Ta bibliothèque reste dans l'onglet Bibliothèque."
+                        else "Les recommandations sont indisponibles pour le moment. Explore la recherche ou vérifie la connexion au serveur.",
                     )
                 }
-            } else {
-                item { SectionTitle("Ta bibliothèque", actionLabel = "Explorer") }
-                lazyColumnItems(tracks.take(12), key = { it.id }) { track -> TrackRow(track, onClick = { onTrackClick(track) }) }
             }
             item { Spacer(Modifier.height(24.dp)) }
         }

@@ -60,6 +60,15 @@ data class SpotifySavedTracksResponse(
 )
 
 @JsonClass(generateAdapter = true)
+data class SpotifySavedLibraryItem(val item: SpotifyTrack? = null)
+
+@JsonClass(generateAdapter = true)
+data class SpotifySavedLibraryResponse(
+    val items: List<SpotifySavedLibraryItem> = emptyList(),
+    val next: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
 data class SpotifyPlaylistTracksRef(val total: Int = 0)
 
 @JsonClass(generateAdapter = true)
@@ -70,6 +79,7 @@ data class SpotifyPlaylist(
     val id: String,
     val name: String,
     val owner: SpotifyPlaylistOwner? = null,
+    val items: SpotifyPlaylistTracksRef? = null,
     val tracks: SpotifyPlaylistTracksRef = SpotifyPlaylistTracksRef(),
 )
 
@@ -88,6 +98,40 @@ data class SpotifyPlaylistTrackItem(val track: SpotifyTrack? = null)
 data class SpotifyPlaylistTracksResponse(
     val items: List<SpotifyPlaylistTrackItem> = emptyList(),
     val next: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class SpotifyPlaylistItem(val item: SpotifyTrack? = null, val track: SpotifyTrack? = null)
+
+@JsonClass(generateAdapter = true)
+data class SpotifyPlaylistItemsResponse(
+    val items: List<SpotifyPlaylistItem> = emptyList(),
+    val next: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class SpotifyUrisRequest(val uris: List<String>)
+
+@JsonClass(generateAdapter = true)
+data class SpotifyRemoveItemsRequest(val items: List<SpotifyPlaylistRemoveItem>)
+
+@JsonClass(generateAdapter = true)
+data class SpotifyPlaylistRemoveItem(val uri: String)
+
+@JsonClass(generateAdapter = true)
+data class SpotifyCreatePlaylistRequest(
+    val name: String,
+    val description: String = "Créée depuis MuzziQ",
+    val `public`: Boolean = false,
+    val collaborative: Boolean = false,
+)
+
+@JsonClass(generateAdapter = true)
+data class SpotifyCreatedPlaylistResponse(
+    val id: String,
+    val name: String,
+    val tracks: SpotifyPlaylistTracksRef = SpotifyPlaylistTracksRef(),
+    val items: SpotifyPlaylistTracksRef? = null,
 )
 
 /** [images] : avatar du compte (documenté — "Get Current User's Profile"), plusieurs

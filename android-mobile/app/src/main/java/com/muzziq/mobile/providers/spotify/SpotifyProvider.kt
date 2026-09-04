@@ -10,8 +10,10 @@ import com.muzziq.mobile.domain.PlaylistSummary
 import com.muzziq.mobile.domain.StreamResolver
 
 /**
- * Provider Spotify (plan §67, priorité 5) — catalogue/bibliothèque/playlists en
- * LECTURE SEULE uniquement, via la Web API officielle Spotify. Assemblé en
+ * Provider Spotify (plan §67, priorité 5) — catalogue/bibliothèque/playlists via
+ * la Web API officielle Spotify. Les écritures sont explicites, limitées aux
+ * actions déclenchées par l'utilisateur, et jamais à un téléchargement de flux.
+ * Assemblé en
  * `domain.MusicProvider`/enregistré dans `ProviderRegistry` par AppViewModel
  * (registerSpotifyProvider(), déclenché après un login réussi ou restauré au
  * démarrage si un compte est déjà lié) — voir AppViewModel.handleSpotifyCallback
@@ -70,14 +72,32 @@ class SpotifyProvider(
         }
     }
 
-    /** "Bibliothèque" Spotify = morceaux mis en Favoris ("Titres likés") — premier page
-     * uniquement (50 morceaux, limite Spotify par appel) : pas de pagination complète
-     * dans cette V1, limitation honnête plutôt qu'un appel bloquant en boucle non borné. */
+    /** "Bibliothèque" Spotify = morceaux mis en Favoris ("Titres likés"). */
     override suspend fun library(): Result<List<Track>> = withBearer { bearer ->
         runCatching {
-            val res = SpotifyApiClientFactory.web.savedTracks(bearer)
+            val res = SpotifyApiClientFactory.web.savedLibrary(bearer)
             if (!res.isSuccessful) error("Bibliothèque Spotify indisponible (${res.code()})")
-            res.body()?.items.orEmpty().map { it.track.toTrack() }
+            res.body()?.items.orEmpty().mapNotNull { it.item?.toTrack() }
+        }
+    }
+
+    suspend fun saveTracks(trackIds: List<String>): Result<Unit> = withBearer { bearer ->
+        runCatching {
+            trackIds.chunked(40).forEach { chunk ->
+                if (chunk.isEmpty()) return@forEach
+                val res = SpotifyApiClientFactory.web.saveLibraryItems(bearer, chunk.joinToString(",") { "spotify:track:$it" })
+                if (!res.isSuccessful) error("Ajout des favoris Spotify échoué (${res.code()})")
+            }
+        }
+    }
+
+    suspend fun removeTracks(trackIds: List<String>): Result<Unit> = withBearer { bearer ->
+        runCatching {
+            trackIds.chunked(40).forEach { chunk ->
+                if (chunk.isEmpty()) return@forEach
+                val res = SpotifyApiClientFactory.web.removeLibraryItems(bearer, chunk.joinToString(",") { "spotify:track:$it" })
+                if (!res.isSuccessful) error("Retrait des favoris Spotify échoué (${res.code()})")
+            }
         }
     }
 
@@ -96,32 +116,49 @@ class SpotifyProvider(
         runCatching {
             val res = SpotifyApiClientFactory.web.myPlaylists(bearer)
             if (!res.isSuccessful) error("Playlists Spotify indisponibles (${res.code()})")
-            res.body()?.items.orEmpty().map { PlaylistSummary(it.id, it.name, it.tracks.total, MusicProviderId.SPOTIFY) }
+            res.body()?.items.orEmpty().map { PlaylistSummary(it.id, it.name, it.items?.total ?: it.tracks.total, MusicProviderId.SPOTIFY) }
         }
     }
 
     override suspend fun playlistTracks(playlistId: String): Result<List<Track>> = withBearer { bearer ->
         runCatching {
-            val res = SpotifyApiClientFactory.web.playlistTracks(playlistId, bearer)
+            val res = SpotifyApiClientFactory.web.playlistItems(playlistId, bearer)
             if (!res.isSuccessful) error("Contenu de playlist Spotify indisponible (${res.code()})")
-            res.body()?.items.orEmpty().mapNotNull { it.track?.toTrack() }
+            res.body()?.items.orEmpty().mapNotNull { (it.item ?: it.track)?.toTrack() }
         }
     }
 
-    // Lecture seule assumée (règle du plan : "playlists en lecture au minimum" pour
-    // cette V1) — échec explicite plutôt qu'un bouton qui prétendrait créer/modifier une
-    // playlist Spotify sans jamais appeler la moindre route d'écriture.
-    override suspend fun createPlaylist(name: String): Result<PlaylistSummary> =
-        Result.failure(UnsupportedOperationException("Création de playlist Spotify non supportée (lecture seule)"))
+    override suspend fun createPlaylist(name: String): Result<PlaylistSummary> = withBearer { bearer ->
+        runCatching {
+            val res = SpotifyApiClientFactory.web.createPlaylist(bearer, SpotifyCreatePlaylistRequest(name.trim()))
+            if (!res.isSuccessful) error("Création de playlist Spotify échouée (${res.code()})")
+            val playlist = res.body() ?: error("Réponse Spotify vide")
+            PlaylistSummary(playlist.id, playlist.name, playlist.items?.total ?: playlist.tracks.total, MusicProviderId.SPOTIFY)
+        }
+    }
 
-    override suspend fun deletePlaylist(playlistId: String): Result<Unit> =
-        Result.failure(UnsupportedOperationException("Suppression de playlist Spotify non supportée (lecture seule)"))
+    override suspend fun deletePlaylist(playlistId: String): Result<Unit> = withBearer { bearer ->
+        runCatching {
+            val res = SpotifyApiClientFactory.web.deletePlaylist(playlistId, bearer)
+            if (!res.isSuccessful) error("Suppression de playlist Spotify échouée (${res.code()})")
+        }
+    }
 
-    override suspend fun addTrackToPlaylist(playlistId: String, track: Track): Result<Unit> =
-        Result.failure(UnsupportedOperationException("Modification de playlist Spotify non supportée (lecture seule)"))
+    override suspend fun addTrackToPlaylist(playlistId: String, track: Track): Result<Unit> = withBearer { bearer ->
+        runCatching {
+            val spotifyId = (track.source as? TrackSource.Spotify)?.spotifyTrackId
+                ?: throw UnsupportedOperationException("Ce morceau n'est pas identifié dans Spotify")
+            val res = SpotifyApiClientFactory.web.addPlaylistItems(playlistId, bearer, SpotifyUrisRequest(listOf("spotify:track:$spotifyId")))
+            if (!res.isSuccessful) error("Ajout à la playlist Spotify échoué (${res.code()})")
+        }
+    }
 
-    override suspend fun removeTrackFromPlaylist(playlistId: String, trackId: String): Result<Unit> =
-        Result.failure(UnsupportedOperationException("Modification de playlist Spotify non supportée (lecture seule)"))
+    override suspend fun removeTrackFromPlaylist(playlistId: String, trackId: String): Result<Unit> = withBearer { bearer ->
+        runCatching {
+            val res = SpotifyApiClientFactory.web.removePlaylistItems(playlistId, bearer, SpotifyRemoveItemsRequest(listOf(SpotifyPlaylistRemoveItem("spotify:track:$trackId"))))
+            if (!res.isSuccessful) error("Retrait de la playlist Spotify échoué (${res.code()})")
+        }
+    }
 
     private fun SpotifyTrack.toTrack(): Track {
         val bestArtwork = album?.images?.maxByOrNull { (it.width ?: 0) * (it.height ?: 0) }?.url

@@ -24,10 +24,12 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   const body = await req.json();
-  if (!body.type || !body.source || !body.provider || !body.providerTrackId || !body.title || !body.artist) {
-    return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 });
+  if (!body.type || !body.source) return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 });
+  const existing = body.recordingId ? listRecordings().find((item) => item.id === body.recordingId) : undefined;
+  if (!existing && (!body.provider || !body.providerTrackId || !body.title || !body.artist)) {
+    return NextResponse.json({ error: "Identité du recording ou métadonnées requises" }, { status: 400 });
   }
-  const recording = findOrCreateRecordingFromExternal(body);
+  const recording = existing ?? findOrCreateRecordingFromExternal(body);
   const event = recordEvent({ recordingId: recording.id, type: body.type, source: body.source });
 
   // Additif — jamais bloquant : le Context Engine SQLite (plan §45, porté de

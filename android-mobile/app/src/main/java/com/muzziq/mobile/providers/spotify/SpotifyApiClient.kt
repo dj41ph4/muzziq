@@ -9,9 +9,13 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.FormUrlEncoded
 import retrofit2.http.Field
+import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.HTTP
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
@@ -42,9 +46,8 @@ interface SpotifyAccountsApi {
     ): Response<SpotifyTokenResponse>
 }
 
-/** `api.spotify.com` — Web API documentée officiellement. Lecture seule pour
- * cette V1 (voir SpotifyProvider) : aucune route d'écriture (créer/modifier une
- * playlist Spotify) n'est consommée. */
+/** `api.spotify.com` — Web API documentée officiellement. Les écritures sont
+ * explicites et ne sont utilisées qu'après une action de l'utilisateur. */
 interface SpotifyWebApi {
     @GET("v1/me")
     suspend fun me(@Header("Authorization") bearer: String): Response<SpotifyMeResponse>
@@ -56,6 +59,25 @@ interface SpotifyWebApi {
         @Query("type") type: String = "track",
         @Query("limit") limit: Int = 25,
     ): Response<SpotifySearchResponse>
+
+    @GET("v1/me/library")
+    suspend fun savedLibrary(
+        @Header("Authorization") bearer: String,
+        @Query("limit") limit: Int = 50,
+        @Query("offset") offset: Int = 0,
+    ): Response<SpotifySavedLibraryResponse>
+
+    @PUT("v1/me/library")
+    suspend fun saveLibraryItems(
+        @Header("Authorization") bearer: String,
+        @Query("uris") uris: String,
+    ): Response<Unit>
+
+    @DELETE("v1/me/library")
+    suspend fun removeLibraryItems(
+        @Header("Authorization") bearer: String,
+        @Query("uris") uris: String,
+    ): Response<Unit>
 
     @GET("v1/me/tracks")
     suspend fun savedTracks(
@@ -70,13 +92,36 @@ interface SpotifyWebApi {
         @Query("limit") limit: Int = 50,
     ): Response<SpotifyPlaylistsResponse>
 
-    @GET("v1/playlists/{id}/tracks")
-    suspend fun playlistTracks(
+    @GET("v1/playlists/{id}/items")
+    suspend fun playlistItems(
         @Path("id") id: String,
         @Header("Authorization") bearer: String,
         @Query("limit") limit: Int = 100,
         @Query("offset") offset: Int = 0,
-    ): Response<SpotifyPlaylistTracksResponse>
+    ): Response<SpotifyPlaylistItemsResponse>
+
+    @POST("v1/me/playlists")
+    suspend fun createPlaylist(
+        @Header("Authorization") bearer: String,
+        @Body request: SpotifyCreatePlaylistRequest,
+    ): Response<SpotifyCreatedPlaylistResponse>
+
+    @DELETE("v1/playlists/{id}/followers")
+    suspend fun deletePlaylist(@Path("id") id: String, @Header("Authorization") bearer: String): Response<Unit>
+
+    @POST("v1/playlists/{id}/items")
+    suspend fun addPlaylistItems(
+        @Path("id") id: String,
+        @Header("Authorization") bearer: String,
+        @Body request: SpotifyUrisRequest,
+    ): Response<Unit>
+
+    @HTTP(method = "DELETE", path = "v1/playlists/{id}/items", hasBody = true)
+    suspend fun removePlaylistItems(
+        @Path("id") id: String,
+        @Header("Authorization") bearer: String,
+        @Body request: SpotifyRemoveItemsRequest,
+    ): Response<Unit>
 }
 
 object SpotifyApiClientFactory {

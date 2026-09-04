@@ -142,9 +142,8 @@ class SpotifyAuthManager(
          * que fait Spotify lui-même pour les apps tierces PKCE mobiles. */
         const val REDIRECT_URI = "muzziq://spotify-callback"
 
-        /** Lecture seule (règle "playlists en lecture au minimum") : bibliothèque,
-         * playlists, identité — jamais un scope d'écriture (`playlist-modify-*`,
-         * `user-library-modify`) tant qu'aucune action d'écriture n'est implémentée. */
-        const val SCOPES = "user-read-private user-library-read playlist-read-private playlist-read-collaborative"
+        /** Lecture + écritures déclenchées explicitement depuis les réglages ou les
+         * playlists. Spotify ne donne toujours pas de droit de télécharger ses flux. */
+        const val SCOPES = "user-read-private user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private"
     }
 }

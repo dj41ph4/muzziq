@@ -4,6 +4,11 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Self-contained server output for lean Docker images and portable installs.
   output: "standalone",
+  // WebTorrent embarque des modules natifs optionnels. Ils sont chargés
+  // uniquement quand une route d'acquisition est appelée, jamais dans le
+  // bundle client : on les laisse au runtime Node pour garder le build
+  // portable même sans toolchain native installée.
+  serverExternalPackages: ["webtorrent"],
   // engine/ will carry its own package.json once the torrent engine process
   // exists — pin the trace root now so Next's monorepo-root auto-detection
   // never has to guess.
