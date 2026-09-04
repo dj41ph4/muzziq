@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -20,10 +22,21 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -39,6 +52,37 @@ import com.muzziq.mobile.ui.theme.MuzziQColors
  * appelant — mêmes branchements de données qu'avant cette passe, juste la couche visuelle.
  */
 
+/** Fond vivant partagé par les écrans principaux : halos lents et profondeur légère,
+ * sans détourner l'attention de la musique. */
+@Composable
+fun MuzziQBackdrop(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val transition = rememberInfiniteTransition(label = "muzziq-backdrop")
+    val drift by transition.animateFloat(
+        initialValue = 0.12f,
+        targetValue = 0.28f,
+        animationSpec = infiniteRepeatable(tween(5200, easing = LinearEasing), RepeatMode.Reverse),
+        label = "backdrop-glow",
+    )
+    Box(modifier.fillMaxWidth().background(MuzziQColors.Bg)) {
+        Box(
+            Modifier
+                .size(280.dp)
+                .offset(x = (-110).dp, y = (-110).dp)
+                .alpha(drift)
+                .background(Brush.radialGradient(listOf(MuzziQColors.Brand, Color.Transparent)), CircleShape),
+        )
+        Box(
+            Modifier
+                .size(230.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 90.dp, y = 50.dp)
+                .alpha(drift * 0.7f)
+                .background(Brush.radialGradient(listOf(MuzziQColors.AccentViolet, Color.Transparent)), CircleShape),
+        )
+        content()
+    }
+}
+
 /** Titre de section au-dessus d'un carrousel ou d'une liste (§56 SectionTitle). */
 @Composable
 fun SectionTitle(
@@ -50,11 +94,14 @@ fun SectionTitle(
     Row(
         modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
+            .padding(start = 18.dp, end = 18.dp, top = 24.dp, bottom = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, color = MuzziQColors.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(MuzziQColors.Brand))
+            Text(title, color = MuzziQColors.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 9.dp))
+        }
         if (actionLabel != null && onActionClick != null) {
             Text(
                 actionLabel,
@@ -223,12 +270,12 @@ fun QuickTile(
 ) {
     Row(
         modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(MuzziQColors.Surface)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MuzziQColors.SurfaceRaised)
             .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        MediaCover(artworkUrl, 52.dp, RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
+        MediaCover(artworkUrl, 58.dp, RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
         Text(
             title,
             color = MuzziQColors.TextPrimary,
@@ -259,7 +306,7 @@ fun MuzziQFilterChip(
             .clip(RoundedCornerShape(50))
             .background(if (selected) MuzziQColors.Brand else MuzziQColors.Surface)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 7.dp),
+            .padding(horizontal = 15.dp, vertical = 8.dp),
     )
 }
 
@@ -315,7 +362,22 @@ fun HeroCard(
  * resterait à ajouter si des chargements visiblement lents sont un jour observés. */
 @Composable
 fun Skeleton(modifier: Modifier = Modifier, shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(8.dp)) {
-    Box(modifier.clip(shape).background(MuzziQColors.Surface))
+    val transition = rememberInfiniteTransition(label = "skeleton")
+    val shimmer by transition.animateFloat(
+        initialValue = -1f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing)),
+        label = "skeleton-shimmer",
+    )
+    Box(
+        modifier.clip(shape).background(
+            Brush.linearGradient(
+                colors = listOf(MuzziQColors.Surface, MuzziQColors.SurfaceRaised, MuzziQColors.Surface),
+                start = Offset(shimmer * 420f, 0f),
+                end = Offset(shimmer * 420f + 260f, 0f),
+            ),
+        ),
+    )
 }
 
 /** État vide générique (§56 EmptyState) — icône + message centré, utilisé par les écrans
@@ -355,7 +417,7 @@ fun MuzziQTopBar(
     Row(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -363,8 +425,35 @@ fun MuzziQTopBar(
             if (subtitle != null) {
                 Text(subtitle, color = MuzziQColors.TextMuted, fontSize = 14.sp)
             }
-            Text(title, color = MuzziQColors.TextPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text(title, color = MuzziQColors.TextPrimary, fontSize = 28.sp, fontWeight = FontWeight.Black)
         }
         if (trailingContent != null) trailingContent()
+    }
+}
+
+@Composable
+fun ModeBadge(label: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(50))
+            .background(MuzziQColors.Brand.copy(alpha = 0.12f))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(MuzziQColors.Brand))
+        Text(label, color = MuzziQColors.Brand, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 6.dp))
+    }
+}
+
+@Composable
+fun AnimatedEqualizer(modifier: Modifier = Modifier, color: Color = MuzziQColors.Brand) {
+    val transition = rememberInfiniteTransition(label = "equalizer")
+    val first by transition.animateFloat(0.35f, 1f, infiniteRepeatable(tween(620), RepeatMode.Reverse), label = "bar-1")
+    val second by transition.animateFloat(1f, 0.3f, infiniteRepeatable(tween(520), RepeatMode.Reverse), label = "bar-2")
+    val third by transition.animateFloat(0.5f, 0.95f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "bar-3")
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
+        listOf(first, second, third).forEach { height ->
+            Box(Modifier.width(3.dp).height((14 * height).dp).clip(RoundedCornerShape(3.dp)).background(color))
+        }
     }
 }

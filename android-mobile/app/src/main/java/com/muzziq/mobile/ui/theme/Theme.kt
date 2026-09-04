@@ -2,8 +2,10 @@ package com.muzziq.mobile.ui.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 
 /**
  * Design system MuzziQ Android — palette reprise du serveur web
@@ -17,6 +19,10 @@ object MuzziQColors {
     val Bg = Color(0xFF0A0A0C)
     val BgElevated = Color(0xFF0F0F12)
     val Surface = Color(0xFF141417)
+    val SurfaceRaised = Color(0xFF1B1B20)
+    val SurfaceGlass = Color(0xCC1A1A20)
+    val AccentBlue = Color(0xFF7C9DFF)
+    val AccentViolet = Color(0xFFC69BFF)
     val TextPrimary = Color(0xFFF5F7F5)
     val TextMuted = Color(0xFF9AA09A)
     val TextFaint = Color(0xFF60655F)
@@ -36,5 +42,12 @@ private val MuzziQDarkScheme = darkColorScheme(
 
 @Composable
 fun MuzziQTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = MuzziQDarkScheme, content = content)
+    MaterialTheme(
+        colorScheme = MuzziQDarkScheme,
+        typography = Typography().copy(
+            titleLarge = Typography().titleLarge.copy(letterSpacing = (-0.3).sp),
+            headlineLarge = Typography().headlineLarge.copy(letterSpacing = (-0.6).sp),
+        ),
+        content = content,
+    )
 }

@@ -132,6 +132,8 @@ dependencies {
     implementation(libs.moshi.kotlin)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.okhttp)
+    implementation("io.ktor:ktor-client-content-negotiation:3.1.3")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.1.3")
     implementation("com.github.MetrolistGroup.innertubex:innertubex:0.5.2")
 
     implementation(libs.coil.compose)

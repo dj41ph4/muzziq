@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.muzziq.mobile.core.capabilities.ServerConnectionState
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +27,7 @@ class AppPrefs(private val context: Context) {
         val LAST_SCAN_AT = intPreferencesKey("last_local_scan_at")
         val ONBOARDED = booleanPreferencesKey("onboarded")
         val SERVER_CONNECTION_STATE = stringPreferencesKey("server_connection_state")
+        val SAVED_SERVER_URLS = stringSetPreferencesKey("saved_server_urls")
     }
 
     val mode: Flow<AppMode> = context.dataStore.data.map { prefs ->
@@ -37,6 +39,10 @@ class AppPrefs(private val context: Context) {
     }
 
     val serverUrl: Flow<String?> = context.dataStore.data.map { it[Keys.SERVER_URL] }
+    /** Serveurs connus par l'utilisateur, conservés indépendamment du mode actif. */
+    val savedServerUrls: Flow<List<String>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.SAVED_SERVER_URLS].orEmpty().toList().sorted()
+    }
     val serverConnectionState: Flow<ServerConnectionState> = context.dataStore.data.map { prefs ->
         when (prefs[Keys.SERVER_CONNECTION_STATE]) {
             "CONNECTED" -> ServerConnectionState.CONNECTED
@@ -58,11 +64,28 @@ class AppPrefs(private val context: Context) {
     }
 
     suspend fun setLinked(serverUrl: String) {
+        val normalized = normalizeServerUrl(serverUrl)
         context.dataStore.edit {
             it[Keys.MODE] = "LINKED"
-            it[Keys.SERVER_URL] = serverUrl
+            it[Keys.SERVER_URL] = normalized
             it[Keys.SERVER_CONNECTION_STATE] = "CONNECTED"
             it[Keys.ONBOARDED] = true
+            it[Keys.SAVED_SERVER_URLS] = it[Keys.SAVED_SERVER_URLS].orEmpty() + normalized
+        }
+    }
+
+    suspend fun rememberServer(serverUrl: String) {
+        val normalized = normalizeServerUrl(serverUrl)
+        if (normalized.isBlank()) return
+        context.dataStore.edit {
+            it[Keys.SAVED_SERVER_URLS] = it[Keys.SAVED_SERVER_URLS].orEmpty() + normalized
+        }
+    }
+
+    suspend fun forgetServer(serverUrl: String) {
+        val normalized = normalizeServerUrl(serverUrl)
+        context.dataStore.edit {
+            it[Keys.SAVED_SERVER_URLS] = it[Keys.SAVED_SERVER_URLS].orEmpty() - normalized
         }
     }
 
@@ -80,7 +103,6 @@ class AppPrefs(private val context: Context) {
     suspend fun resetMode() {
         context.dataStore.edit {
             it.remove(Keys.MODE)
-            it.remove(Keys.SERVER_URL)
             it.remove(Keys.SESSION_COOKIE)
             it.remove(Keys.SERVER_CONNECTION_STATE)
             it[Keys.ONBOARDED] = false
@@ -88,4 +110,8 @@ class AppPrefs(private val context: Context) {
     }
 
     suspend fun currentServerUrlOrNull(): String? = serverUrl.first()
+
+    companion object {
+        fun normalizeServerUrl(value: String): String = value.trim().trimEnd('/')
+    }
 }

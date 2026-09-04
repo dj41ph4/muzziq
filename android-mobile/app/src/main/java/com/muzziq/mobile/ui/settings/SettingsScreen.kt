@@ -1,6 +1,11 @@
 package com.muzziq.mobile.ui.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,192 +16,156 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudQueue
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.ui.SpotifyAccountUiState
+import com.muzziq.mobile.ui.common.MuzziQBackdrop
+import com.muzziq.mobile.ui.common.ModeBadge
 import com.muzziq.mobile.ui.theme.MuzziQColors
 
-/**
- * Réglages (§56.4) — jusqu'ici backToOnboarding() existait côté AppViewModel
- * sans aucun point d'entrée UI : impossible de changer de serveur ou de
- * repasser en standalone sans effacer les données de l'app. Corrigé ici.
- * Étendu (§67, priorité 5) avec une section Comptes → Spotify plutôt qu'un
- * sous-écran séparé : un seul provider externe câblé à ce jour, un sous-écran
- * dédié serait de la sur-ingénierie tant qu'un deuxième (YouTube Music) n'existe
- * pas réellement.
- */
 @Composable
 fun SettingsScreen(
     mode: AppMode,
     serverUrl: String?,
+    savedServerUrls: List<String> = emptyList(),
     appVersion: String,
     onClose: () -> Unit,
     onChangeMode: () -> Unit,
+    onSelectServer: (String) -> Unit = {},
+    onAddServer: (String) -> Unit = {},
+    onRemoveServer: (String) -> Unit = {},
+    serverBusy: Boolean = false,
+    serverError: String? = null,
     spotifyAccount: SpotifyAccountUiState,
     spotifyBusy: Boolean,
     spotifyError: String?,
     onConnectSpotify: () -> Unit,
     onDisconnectSpotify: () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize().background(MuzziQColors.Bg)) {
-        Column(Modifier.fillMaxSize().systemBarsPadding().padding(20.dp)) {
+    var showAddServer by remember { mutableStateOf(false) }
+    var newServerUrl by remember { mutableStateOf("") }
+
+    MuzziQBackdrop(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().systemBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Retour", tint = MuzziQColors.TextPrimary)
-                }
-                Text("Réglages", color = MuzziQColors.TextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+                IconButton(onClick = onClose) { Icon(Icons.Rounded.ArrowBack, contentDescription = "Retour", tint = MuzziQColors.TextPrimary) }
+                Text("Réglages", color = MuzziQColors.TextPrimary, fontSize = 26.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f).padding(start = 4.dp))
+                ModeBadge(if (mode == AppMode.STANDALONE) "LOCAL" else "SERVEUR")
             }
 
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 24.dp)
-                    .background(MuzziQColors.Surface, RoundedCornerShape(16.dp))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Text("Mode actuel", color = MuzziQColors.TextMuted, fontSize = 12.sp)
-                Text(
-                    if (mode == AppMode.STANDALONE) "Local (standalone)" else "Connecté à un serveur",
-                    color = MuzziQColors.TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (mode == AppMode.LINKED && serverUrl != null) {
-                    Text(serverUrl, color = MuzziQColors.TextFaint, fontSize = 12.sp)
+            SettingsSectionLabel("SOURCE ACTIVE")
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MuzziQColors.Surface.copy(alpha = 0.94f)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(MuzziQColors.Brand.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+                        Icon(if (mode == AppMode.STANDALONE) Icons.Rounded.MusicNote else Icons.Rounded.CloudQueue, contentDescription = null, tint = MuzziQColors.Brand)
+                    }
+                    Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(if (mode == AppMode.STANDALONE) "Bibliothèque locale" else "Serveur MuzziQ", color = MuzziQColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(if (mode == AppMode.STANDALONE) "Lecture directe sur cet appareil" else serverUrl ?: "Serveur actif", color = MuzziQColors.TextMuted, fontSize = 12.sp, maxLines = 1)
+                    }
+                    Icon(Icons.Rounded.CheckCircle, contentDescription = "Actif", tint = MuzziQColors.Brand)
+                }
+                Button(onClick = onChangeMode, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.SurfaceRaised, contentColor = MuzziQColors.TextPrimary)) {
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text(if (mode == AppMode.STANDALONE) "Choisir un serveur" else "Revenir au choix des sources", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
                 }
             }
 
-            Button(
-                onClick = onChangeMode,
-                modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 20.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.Surface, contentColor = MuzziQColors.TextPrimary),
-            ) {
-                Text(
-                    if (mode == AppMode.STANDALONE) "Se connecter à un serveur" else "Changer de serveur / passer en local",
-                    fontWeight = FontWeight.SemiBold,
-                )
+            SettingsSectionLabel("SERVEURS MuzziQ")
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MuzziQColors.Surface.copy(alpha = 0.94f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (savedServerUrls.isEmpty()) {
+                    Text("Aucun serveur enregistré. Ajoute ton instance MuzziQ pour la retrouver ici.", color = MuzziQColors.TextMuted, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(8.dp))
+                } else {
+                    savedServerUrls.forEach { url ->
+                        ServerRow(url = url, active = url == serverUrl, onSelect = { onSelectServer(url) }, onRemove = { onRemoveServer(url) })
+                    }
+                }
+                AnimatedVisibility(visible = showAddServer, enter = fadeIn(tween(180)), exit = fadeOut(tween(140))) {
+                    Column(Modifier.fillMaxWidth().padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(value = newServerUrl, onValueChange = { newServerUrl = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, placeholder = { Text("https://muzziq.exemple.com", color = MuzziQColors.TextFaint) })
+                        Button(onClick = { onAddServer(newServerUrl); newServerUrl = ""; showAddServer = false }, enabled = newServerUrl.isNotBlank() && !serverBusy, modifier = Modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.Brand, contentColor = MuzziQColors.Bg)) {
+                            if (serverBusy) CircularProgressIndicator(Modifier.size(18.dp), color = MuzziQColors.Bg, strokeWidth = 2.dp) else Text("Tester et enregistrer", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                if (!showAddServer) {
+                    Text("Ajouter un serveur", color = MuzziQColors.Brand, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { showAddServer = true }.padding(10.dp))
+                }
+                if (serverError != null) Text(serverError, color = Color(0xFFFF7F88), fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp))
             }
-            Text(
-                "Ta bibliothèque locale et tes réglages sur cet appareil ne sont jamais supprimés en changeant de mode.",
-                color = MuzziQColors.TextFaint,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                modifier = Modifier.padding(top = 8.dp),
-            )
 
             if (spotifyAccount != SpotifyAccountUiState.NotConfigured) {
-                Text(
-                    "Comptes",
-                    color = MuzziQColors.TextMuted,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 28.dp, bottom = 8.dp),
-                )
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .background(MuzziQColors.Surface, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val connected = spotifyAccount as? SpotifyAccountUiState.Connected
-                        if (connected?.avatarUrl != null) {
-                            AsyncImage(
-                                model = connected.avatarUrl,
-                                contentDescription = null,
-                                modifier = Modifier.size(40.dp).clip(CircleShape),
-                            )
-                        } else {
-                            Box(
-                                Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(MuzziQColors.BgElevated),
-                            ) {
-                                Icon(
-                                    Icons.Rounded.MusicNote,
-                                    contentDescription = null,
-                                    tint = MuzziQColors.TextMuted,
-                                    modifier = Modifier.padding(8.dp),
-                                )
-                            }
-                        }
-                        Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                            Text("Spotify", color = MuzziQColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                when (spotifyAccount) {
-                                    is SpotifyAccountUiState.Connected -> spotifyAccount.displayName ?: "Connecté"
-                                    else -> "Bibliothèque et playlists en lecture seule"
-                                },
-                                color = MuzziQColors.TextFaint,
-                                fontSize = 12.sp,
-                            )
-                        }
-                        if (spotifyAccount is SpotifyAccountUiState.Connected) {
-                            Icon(Icons.Rounded.CheckCircle, contentDescription = "Connecté", tint = MuzziQColors.TextMuted)
-                        }
-                    }
-
-                    if (spotifyBusy) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MuzziQColors.TextPrimary,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Button(
-                            onClick = if (spotifyAccount is SpotifyAccountUiState.Connected) onDisconnectSpotify else onConnectSpotify,
-                            modifier = Modifier.fillMaxWidth().height(44.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.BgElevated, contentColor = MuzziQColors.TextPrimary),
-                        ) {
-                            Text(
-                                if (spotifyAccount is SpotifyAccountUiState.Connected) "Déconnecter" else "Connecter",
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    }
-
-                    if (spotifyError != null) {
-                        Text(spotifyError, color = MuzziQColors.TextFaint, fontSize = 12.sp)
-                    }
-                }
-                Text(
-                    "Déconnecter Spotify ne supprime jamais tes favoris/playlists/historique — seuls les identifiants du compte sont effacés.",
-                    color = MuzziQColors.TextFaint,
-                    fontSize = 11.sp,
-                    lineHeight = 15.sp,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+                SettingsSectionLabel("COMPTES")
+                SpotifyAccountCard(spotifyAccount, spotifyBusy, spotifyError, onConnectSpotify, onDisconnectSpotify)
             }
 
-            Text(
-                "MuzziQ · v$appVersion",
-                color = MuzziQColors.TextFaint,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 32.dp),
-            )
+            Text("MuzziQ · v$appVersion", color = MuzziQColors.TextFaint, fontSize = 11.sp, modifier = Modifier.padding(top = 12.dp, bottom = 24.dp))
         }
+    }
+}
+
+@Composable
+private fun SettingsSectionLabel(text: String) {
+    Text(text, color = MuzziQColors.TextFaint, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.3.sp, modifier = Modifier.padding(start = 4.dp, top = 8.dp))
+}
+
+@Composable
+private fun ServerRow(url: String, active: Boolean, onSelect: () -> Unit, onRemove: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (active) MuzziQColors.Brand.copy(alpha = 0.1f) else MuzziQColors.SurfaceRaised).clickable(enabled = !active, onClick = onSelect).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Rounded.Link, contentDescription = null, tint = if (active) MuzziQColors.Brand else MuzziQColors.TextMuted, modifier = Modifier.size(19.dp))
+        Text(url, color = MuzziQColors.TextPrimary, fontSize = 12.sp, maxLines = 1, modifier = Modifier.weight(1f).padding(horizontal = 10.dp))
+        if (active) Text("Actif", color = MuzziQColors.Brand, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        else IconButton(onClick = onRemove, modifier = Modifier.size(32.dp)) { Icon(Icons.Rounded.DeleteOutline, contentDescription = "Supprimer", tint = MuzziQColors.TextFaint, modifier = Modifier.size(19.dp)) }
+    }
+}
+
+@Composable
+private fun SpotifyAccountCard(account: SpotifyAccountUiState, busy: Boolean, error: String?, onConnect: () -> Unit, onDisconnect: () -> Unit) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MuzziQColors.Surface.copy(alpha = 0.94f)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val connected = account as? SpotifyAccountUiState.Connected
+            if (connected?.avatarUrl != null) AsyncImage(connected.avatarUrl, contentDescription = null, modifier = Modifier.size(42.dp).clip(CircleShape))
+            else Box(Modifier.size(42.dp).clip(CircleShape).background(MuzziQColors.SurfaceRaised), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.MusicNote, null, tint = MuzziQColors.TextMuted) }
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                Text("Spotify", color = MuzziQColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(if (connected != null) connected.displayName ?: "Connecté" else "Bibliothèque en lecture seule", color = MuzziQColors.TextMuted, fontSize = 12.sp)
+            }
+            if (connected != null) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MuzziQColors.Brand)
+        }
+        if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = MuzziQColors.Brand, strokeWidth = 2.dp)
+        else Button(onClick = if (account is SpotifyAccountUiState.Connected) onDisconnect else onConnect, modifier = Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.SurfaceRaised, contentColor = MuzziQColors.TextPrimary)) { Text(if (account is SpotifyAccountUiState.Connected) "Déconnecter" else "Connecter", fontWeight = FontWeight.SemiBold) }
+        if (error != null) Text(error, color = Color(0xFFFF7F88), fontSize = 12.sp)
     }
 }

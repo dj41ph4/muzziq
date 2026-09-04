@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +60,8 @@ import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.data.model.TrackSource
 import com.muzziq.mobile.domain.LyricsProvider
 import com.muzziq.mobile.ui.common.MuzziQFilterChip
+import com.muzziq.mobile.ui.common.AnimatedEqualizer
+import com.muzziq.mobile.ui.common.ModeBadge
 import com.muzziq.mobile.ui.common.Skeleton
 import com.muzziq.mobile.ui.palette.rememberDominantColor
 import com.muzziq.mobile.ui.theme.MuzziQColors
@@ -130,6 +133,7 @@ fun SharedTransitionScope.MiniPlayer(
                 Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                 Text(track.artist, color = MuzziQColors.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            if (isPlaying) AnimatedEqualizer(Modifier.padding(end = 6.dp))
             IconButton(onClick = onTogglePlayPause) {
                 Icon(
                     if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
@@ -188,6 +192,7 @@ fun SharedTransitionScope.PlayerScreen(
 ) {
     val dominant = rememberDominantColor(track.artworkUrl)
     val animatedDominant by animateFloatAsState(targetValue = 1f, animationSpec = tween(600), label = "grad")
+    val artworkScale by animateFloatAsState(if (isPlaying) 1.025f else 1f, tween(700), label = "artwork-breathe")
     var panel by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(PlayerPanel.NOW_PLAYING) }
 
     Box(
@@ -230,6 +235,7 @@ fun SharedTransitionScope.PlayerScreen(
                         MuzziQFilterChip(label = p.label, selected = panel == p, onClick = { panel = p })
                     }
                 }
+                if (isCasting) ModeBadge("CAST")
             }
 
             if (panel != PlayerPanel.NOW_PLAYING) {
@@ -248,6 +254,7 @@ fun SharedTransitionScope.PlayerScreen(
                     .fillMaxWidth(0.82f)
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(16.dp))
+                    .graphicsLayer { scaleX = artworkScale; scaleY = artworkScale }
                     .sharedElement(
                         rememberSharedContentState(key = "player-artwork"),
                         animatedVisibilityScope = animatedVisibilityScope,

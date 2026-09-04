@@ -1,8 +1,15 @@
 package com.muzziq.mobile.ui.home
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,12 +17,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items as lazyColumnItems
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.muzziq.mobile.data.AppMode
 import com.muzziq.mobile.data.model.Track
 import com.muzziq.mobile.domain.MusicProviderId
@@ -23,6 +44,8 @@ import com.muzziq.mobile.domain.PlaylistSummary
 import com.muzziq.mobile.ui.HomeRowUi
 import com.muzziq.mobile.ui.common.EmptyState
 import com.muzziq.mobile.ui.common.HorizontalShelf
+import com.muzziq.mobile.ui.common.ModeBadge
+import com.muzziq.mobile.ui.common.MuzziQBackdrop
 import com.muzziq.mobile.ui.common.MuzziQTopBar
 import com.muzziq.mobile.ui.common.QuickTile
 import com.muzziq.mobile.ui.common.SectionTitle
@@ -31,17 +54,6 @@ import com.muzziq.mobile.ui.common.TrackRow
 import com.muzziq.mobile.ui.theme.MuzziQColors
 import java.time.LocalTime
 
-/**
- * Home/Discover (§46, §56-58) — salutation dépendant de l'heure locale, grille de raccourcis
- * compacts (playlists existantes, réutilise QuickTile plutôt qu'un nouveau composant §56),
- * puis carrousels horizontaux titrés pour chaque rangée serveur (GET /api/home, moteur de
- * recommandation déterministe déjà réel — voir AppViewModel.refreshHomeRows). Une rangée
- * vide n'est jamais envoyée par le serveur (voir doc en tête de HomeRowUi côté ViewModel),
- * donc chaque carrousel affiché ici a toujours du contenu — jamais de section vide "pour
- * faire joli". En mode Standalone ou tant que le serveur n'a aucune rangée, on retombe sur
- * la bibliothèque à plat (comportement fonctionnel inchangé par rapport à avant cette passe
- * visuelle, uniquement la présentation change).
- */
 @Composable
 fun HomeScreen(
     mode: AppMode,
@@ -53,53 +65,53 @@ fun HomeScreen(
     onOpenPlaylist: (String) -> Unit = {},
 ) {
     val greeting = remember(mode) { greetingForNow() }
-    // Spotify (lecture seule, §58) exclu des raccourcis : ouvrir une playlist Spotify passe
-    // par l'onglet Playlists dédié, pas par un raccourci Home qui suggérerait une action
-    // identique (ajout/suppression) à ce que permettent les playlists MuzziQ.
     val quickPlaylists = playlists.filter { it.provider != MusicProviderId.SPOTIFY }.take(6)
+    val featuredTrack = tracks.firstOrNull()
 
-    Box(Modifier.fillMaxSize().background(MuzziQColors.Bg)) {
+    MuzziQBackdrop(Modifier.fillMaxSize()) {
         LazyColumn(contentPadding = contentPadding) {
             item {
                 MuzziQTopBar(
                     title = greeting,
-                    subtitle = if (mode == AppMode.STANDALONE) "Ta bibliothèque locale" else "Ta bibliothèque MuzziQ",
+                    subtitle = if (mode == AppMode.STANDALONE) "Ton espace musical" else "Ton espace MuzziQ",
+                    trailingContent = { ModeBadge(if (mode == AppMode.STANDALONE) "LOCAL" else "SERVEUR") },
                 )
             }
 
+            if (featuredTrack != null) {
+                item {
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(tween(500)) + slideInVertically(tween(500)) { it / 3 },
+                    ) {
+                        FeaturedListeningCard(track = featuredTrack, onClick = { onTrackClick(featuredTrack) })
+                    }
+                }
+            }
+
             if (quickPlaylists.isNotEmpty()) {
-                // Grille 2 colonnes non-lazy (au plus 6 raccourcis, jamais de contenu non
-                // borné) plutôt qu'un LazyVerticalGrid imbriqué dans ce LazyColumn — évite le
-                // double scrollable et le calcul de hauteur fragile qu'imposerait une grille
-                // paresseuse ici (règle §"pas de liste non bornée dans une colonne scrollable").
+                item { SectionTitle("Reprendre l'écoute") }
                 lazyColumnItems(quickPlaylists.chunked(2)) { rowPair ->
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         rowPair.forEach { playlist ->
                             QuickTile(
                                 title = playlist.name,
                                 artworkUrl = null,
-                                modifier = Modifier.weight(1f).height(52.dp),
+                                modifier = Modifier.weight(1f).height(64.dp),
                                 onClick = { onOpenPlaylist(playlist.id) },
                             )
                         }
-                        if (rowPair.size == 1) {
-                            Spacer(Modifier.weight(1f))
-                        }
+                        if (rowPair.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
             }
 
             if (homeRows.isNotEmpty()) {
                 homeRows.forEach { row ->
-                    item(key = "row-title-${row.id}") { SectionTitle(row.title) }
+                    item(key = "row-title-${row.id}") { SectionTitle(row.title, actionLabel = "Tout voir") }
                     item(key = "row-shelf-${row.id}") {
                         HorizontalShelf(items = row.tracks, key = { "row-${row.id}-${it.id}" }) { track ->
-                            SquareMediaCard(
-                                title = track.title,
-                                subtitle = track.artist,
-                                artworkUrl = track.artworkUrl,
-                                onClick = { onTrackClick(track) },
-                            )
+                            SquareMediaCard(title = track.title, subtitle = track.artist, artworkUrl = track.artworkUrl, onClick = { onTrackClick(track) })
                         }
                     }
                 }
@@ -111,11 +123,37 @@ fun HomeScreen(
                     )
                 }
             } else {
-                item { SectionTitle("Ta bibliothèque") }
-                lazyColumnItems(tracks, key = { it.id }) { track ->
-                    TrackRow(track, onClick = { onTrackClick(track) })
-                }
+                item { SectionTitle("Ta bibliothèque", actionLabel = "Explorer") }
+                lazyColumnItems(tracks.take(12), key = { it.id }) { track -> TrackRow(track, onClick = { onTrackClick(track) }) }
             }
+            item { Spacer(Modifier.height(24.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun FeaturedListeningCard(track: Track, onClick: () -> Unit) {
+    val scale by animateFloatAsState(1f, tween(700), label = "featured-scale")
+    Row(
+        Modifier
+            .padding(horizontal = 18.dp, vertical = 4.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Brush.linearGradient(listOf(MuzziQColors.AccentViolet.copy(alpha = 0.9f), MuzziQColors.BrandDark, MuzziQColors.SurfaceRaised)))
+            .clickable(onClick = onClick)
+            .padding(18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size((68 * scale).dp).clip(RoundedCornerShape(16.dp)).background(MuzziQColors.Bg.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, tint = MuzziQColors.TextPrimary, modifier = Modifier.size(28.dp))
+        }
+        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+            Text("Pour toi aujourd'hui", color = MuzziQColors.TextPrimary.copy(alpha = 0.8f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text(track.title, color = MuzziQColors.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 5.dp))
+            Text(track.artist, color = MuzziQColors.TextPrimary.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 3.dp))
+        }
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(50)).background(MuzziQColors.TextPrimary), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.PlayArrow, contentDescription = "Lire", tint = MuzziQColors.Bg, modifier = Modifier.size(26.dp))
         }
     }
 }

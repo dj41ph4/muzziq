@@ -226,6 +226,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
      * serveur il est connecté, et en changer, sans réinstaller l'app. */
     val serverUrl: StateFlow<String?> = prefs.serverUrl
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val savedServerUrls: StateFlow<List<String>> = prefs.savedServerUrls
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val _capabilities = MutableStateFlow(capabilityManager.forConnection(ServerConnectionState.DISCONNECTED))
     val capabilities: StateFlow<MuzziQCapabilities> = _capabilities.asStateFlow()
 
@@ -592,19 +594,40 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun chooseLinked(url: String) {
         viewModelScope.launch {
+            val normalizedUrl = AppPrefs.normalizeServerUrl(url)
+            if (normalizedUrl.isBlank()) return@launch
             prefs.setServerConnectionState(ServerConnectionState.CONNECTING)
             _busy.value = true
             _error.value = null
-            val ok = testServer(url)
+            val ok = testServer(normalizedUrl)
             if (!ok) {
                 prefs.setServerConnectionState(ServerConnectionState.ERROR)
                 _error.value = "Ce serveur ne répond pas comme un serveur MuzziQ."
                 _busy.value = false
                 return@launch
             }
-            prefs.setLinked(url)
-            activateLinked(url)
+            prefs.setLinked(normalizedUrl)
+            activateLinked(normalizedUrl)
             _busy.value = false
+        }
+    }
+
+    /** Sélectionne un serveur déjà validé depuis les réglages ou l'écran d'accueil. */
+    fun selectSavedServer(url: String) = chooseLinked(url)
+
+    /** Supprime un raccourci serveur. Si c'est le serveur actif, on revient au choix
+     * des sources sans toucher à la bibliothèque standalone ni aux autres profils. */
+    fun removeSavedServer(url: String) {
+        viewModelScope.launch {
+            val normalized = AppPrefs.normalizeServerUrl(url)
+            val active = prefs.currentServerUrlOrNull()
+            prefs.forgetServer(normalized)
+            if (active == normalized) {
+                prefs.resetMode()
+                InMemoryProviderRegistry.clear()
+                _serverConnectionState.value = ServerConnectionState.DISCONNECTED
+                _state.value = RootUiState.Onboarding
+            }
         }
     }
 

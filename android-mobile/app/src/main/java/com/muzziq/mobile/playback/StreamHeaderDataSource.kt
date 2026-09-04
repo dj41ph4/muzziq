@@ -44,8 +44,15 @@ private class StreamHeaderDataSource(
             ?.let { remaining -> (remaining - dataSpec.position).coerceAtLeast(0L) }
             ?.let { remaining -> minOf(chunkSize, remaining) }
             ?.takeIf { it > 0L }
-        val boundedSpec = if (request == null || dataSpec.length >= 0) dataSpec
-        else dataSpec.subrange(0, boundedLength ?: chunkSize)
+        // Cap every request, including the ones for which Media3 already knows a
+        // length. Once a progressive load has crossed a chunk boundary, Media3
+        // may carry that finite length into the next DataSpec; leaving it intact
+        // would silently turn the next request back into an unbounded/oversized
+        // CDN request.
+        val boundedSpec = if (request == null) dataSpec else dataSpec.subrange(
+            0,
+            minOf(dataSpec.length.takeIf { it >= 0 } ?: Long.MAX_VALUE, boundedLength ?: chunkSize),
+        )
         return upstream.open(
             if (headers.isEmpty()) boundedSpec else boundedSpec.withAdditionalHeaders(headers),
         )

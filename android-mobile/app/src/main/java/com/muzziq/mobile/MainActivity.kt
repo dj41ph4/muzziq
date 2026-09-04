@@ -42,9 +42,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -135,7 +137,13 @@ class MainActivity : AppCompatActivity() {
         else Manifest.permission.READ_EXTERNAL_STORAGE
 }
 
-private enum class Tab(val label: String) { HOME("Accueil"), SEARCH("Recherche"), LIBRARY("Bibliothèque"), PLAYLISTS("Playlists"), HISTORY("Historique") }
+private enum class Tab(val label: String, val shortLabel: String) {
+    HOME("Accueil", "Accueil"),
+    SEARCH("Recherche", "Recherche"),
+    LIBRARY("Bibliothèque", "Biblio"),
+    PLAYLISTS("Playlists", "Mix"),
+    HISTORY("Historique", "Historique"),
+}
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -148,9 +156,11 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
         RootUiState.Onboarding -> {
             val busy by vm.busy.collectAsStateWithLifecycle()
             val error by vm.error.collectAsStateWithLifecycle()
+            val savedServerUrls by vm.savedServerUrls.collectAsStateWithLifecycle()
             OnboardingScreen(
                 busy = busy,
                 error = error,
+                savedServers = savedServerUrls,
                 onChooseStandalone = {
                     vm.chooseStandalone()
                     val granted = ContextCompat.checkSelfPermission(
@@ -188,7 +198,9 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
             val openPlaylistId by vm.openPlaylistId.collectAsStateWithLifecycle()
             val playlistTracks by vm.playlistTracks.collectAsStateWithLifecycle()
             val history by vm.history.collectAsStateWithLifecycle()
+            val error by vm.error.collectAsStateWithLifecycle()
             val serverUrl by vm.serverUrl.collectAsStateWithLifecycle()
+            val savedServerUrls by vm.savedServerUrls.collectAsStateWithLifecycle()
             var showPlaylistPicker by remember { mutableStateOf(false) }
             var showSettings by remember { mutableStateOf(false) }
             val castController = remember(context) { CastController(context) }
@@ -273,7 +285,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                                     )
                                 }
                             }
-                            NavigationBar(containerColor = MuzziQColors.BgElevated) {
+                            NavigationBar(containerColor = MuzziQColors.BgElevated.copy(alpha = 0.96f), tonalElevation = 8.dp) {
                                 Tab.entries.forEachIndexed { index, t ->
                                     NavigationBarItem(
                                         selected = tab == index,
@@ -290,7 +302,14 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                                                 contentDescription = t.label,
                                             )
                                         },
-                                        label = { Text(t.label) },
+                                        label = { Text(t.shortLabel, maxLines = 1, fontSize = 10.sp) },
+                                        colors = NavigationBarItemDefaults.colors(
+                                            selectedIconColor = MuzziQColors.Bg,
+                                            selectedTextColor = MuzziQColors.Brand,
+                                            indicatorColor = MuzziQColors.Brand,
+                                            unselectedIconColor = MuzziQColors.TextFaint,
+                                            unselectedTextColor = MuzziQColors.TextFaint,
+                                        ),
                                     )
                                 }
                             }
@@ -445,12 +464,18 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                     SettingsScreen(
                         mode = s.mode,
                         serverUrl = serverUrl,
+                        savedServerUrls = savedServerUrls,
                         appVersion = BuildConfig.VERSION_NAME,
                         onClose = { showSettings = false },
                         onChangeMode = {
                             showSettings = false
                             vm.backToOnboarding()
                         },
+                        onSelectServer = { vm.selectSavedServer(it) },
+                        onAddServer = { vm.selectSavedServer(it) },
+                        onRemoveServer = { vm.removeSavedServer(it) },
+                        serverBusy = busy,
+                        serverError = error,
                         spotifyAccount = spotifyAccount,
                         spotifyBusy = spotifyBusy,
                         spotifyError = spotifyError,

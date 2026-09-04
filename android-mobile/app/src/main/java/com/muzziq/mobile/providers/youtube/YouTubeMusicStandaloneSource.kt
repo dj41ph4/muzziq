@@ -187,17 +187,23 @@ class YouTubeMusicStandaloneSource(context: Context) {
         val userAgent: String,
         val mimeType: String,
     ) {
-        fun context() = JSONObject().put("client", JSONObject()
-            .put("clientName", name)
-            .put("clientVersion", version)
-            .put("hl", "fr")
-            .put("gl", "BE"))
+        fun context(): JSONObject {
+            val value = JSONObject().put("client", JSONObject()
+                .put("clientName", name)
+                .put("clientVersion", version)
+                .put("hl", "fr")
+                .put("gl", "BE"))
+            if (name == "WEB_EMBEDDED") {
+                value.put("thirdParty", JSONObject().put("embedUrl", "https://www.reddit.com/"))
+            }
+            return value
+        }
 
         fun streamHeaders(): Map<String, String> = buildMap {
             put("User-Agent", userAgent)
             put("Accept", "*/*")
             put("Accept-Language", "fr-BE,fr;q=0.9")
-            if (name == "WEB_REMIX") {
+            if (name == "WEB_REMIX" || name == "WEB_EMBEDDED") {
                 put("Origin", "https://music.youtube.com")
                 put("Referer", "https://music.youtube.com/")
             }
@@ -361,6 +367,16 @@ class YouTubeMusicStandaloneSource(context: Context) {
          * Les flux iOS imposent des plages bornées et ne sont donc pas remis à
          * un DataSource progressif standard. */
         private val playbackProfiles = listOf(
+            PlaybackProfile(
+                "TVHTML5", "7.20260707.07.00", "7",
+                "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold " +
+                    "(unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
+                "audio/webm"
+            ),
+            PlaybackProfile(
+                "WEB_EMBEDDED", "2.20260708.00.00", "56",
+                WEB_USER_AGENT, "audio/webm"
+            ),
             PlaybackProfile(
                 "ANDROID", "20.10.38", "3",
                 "com.google.android.youtube/20.10.38 (Linux; U; Android 14)", "audio/webm"

@@ -12,6 +12,9 @@ import com.metrolist.innertubex.extraction.YtConfigParserImpl
 import com.metrolist.innertubex.extraction.generateClientPlaybackNonce
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
 
 /**
  * Extraction complète d'un flux audio standalone. La configuration de signature
@@ -19,7 +22,14 @@ import io.ktor.client.engine.okhttp.OkHttp
  */
 class StandaloneStreamExtractor(context: Context) {
     private val appContext = context.applicationContext
-    private val httpClient = HttpClient(OkHttp)
+    private val httpClient = HttpClient(OkHttp) {
+        install(ContentNegotiation) {
+            json(Json {
+                ignoreUnknownKeys = true
+                explicitNulls = false
+            })
+        }
+    }
     private val innerTube = InnerTube(httpClient)
     private val configRepository = AndroidPlayerConfigRepository(appContext)
     private val configStore = RemotePlayerConfigStore(httpClient, configRepository)
@@ -35,7 +45,11 @@ class StandaloneStreamExtractor(context: Context) {
             extractor.extract(
                 videoId = videoId,
                 hints = ContentHints(wantVideo = false).withStreamCapabilities(
-                    allowHls = false,
+                    // When YouTube forces the client onto segmented delivery,
+                    // HLS is the reliable escape hatch: Media3 requests short
+                    // playlist segments instead of extending a signed byte
+                    // range until the CDN returns 403.
+                    allowHls = true,
                     allowSabr = false,
                     // Les flux YouTube récents peuvent exiger des plages bornées.
                     // MuzziQ conserve la taille exacte fournie par l'extracteur.
