@@ -72,7 +72,10 @@ data class SpotifySavedLibraryResponse(
 data class SpotifyPlaylistTracksRef(val total: Int = 0)
 
 @JsonClass(generateAdapter = true)
-data class SpotifyPlaylistOwner(@Json(name = "display_name") val displayName: String? = null)
+data class SpotifyPlaylistOwner(
+    val id: String? = null,
+    @Json(name = "display_name") val displayName: String? = null,
+)
 
 @JsonClass(generateAdapter = true)
 data class SpotifyPlaylist(

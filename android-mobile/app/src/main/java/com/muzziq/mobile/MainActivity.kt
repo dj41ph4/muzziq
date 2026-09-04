@@ -402,11 +402,10 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
 
                 if (showPlaylistPicker) {
                     val track = currentTrack
-                    // Spotify (lecture seule, §58) : jamais proposée ici, ajouter un
-                    // morceau échouerait toujours explicitement côté SpotifyProvider —
-                    // filtrée en amont plutôt que de laisser l'utilisateur taper dans le
-                    // vide sur une option qui ne peut jamais réussir.
-                    val addablePlaylists = playlists.filter { it.provider != MusicProviderId.SPOTIFY }
+                    // Pour une playlist Spotify, AppViewModel résout d'abord une
+                    // correspondance exacte titre + artiste : pas de premier résultat
+                    // approximatif ajouté silencieusement dans le compte Spotify.
+                    val addablePlaylists = playlists
                     AlertDialog(
                         onDismissRequest = { showPlaylistPicker = false },
                         title = { Text("Ajouter à une playlist", color = MuzziQColors.TextPrimary) },
@@ -453,6 +452,7 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                     val spotifyAccount by vm.spotifyAccount.collectAsStateWithLifecycle()
                     val spotifyBusy by vm.spotifyBusy.collectAsStateWithLifecycle()
                     val spotifyError by vm.spotifyError.collectAsStateWithLifecycle()
+                    val showDeviceLocalTracks by vm.showDeviceLocalTracks.collectAsStateWithLifecycle()
                     SettingsScreen(
                         mode = s.mode,
                         serverUrl = serverUrl,
@@ -481,6 +481,9 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                         },
                         onDisconnectSpotify = { vm.disconnectSpotify() },
                         onSyncSpotifyFavorites = { vm.syncSpotifyFavorites() },
+                        onSyncSpotifyPlaylists = { vm.syncSpotifyPlaylists() },
+                        showDeviceLocalTracks = showDeviceLocalTracks,
+                        onShowDeviceLocalTracksChanged = vm::setShowDeviceLocalTracks,
                     )
                 }
             }

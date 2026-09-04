@@ -108,6 +108,27 @@ class SpotifyProvider(
         }
     }
 
+    /** Résout prudemment un morceau MuzziQ vers Spotify pour la synchronisation.
+     * Une absence de correspondance reste une absence : aucun premier résultat vague
+     * n'est ajouté aux favoris ou aux playlists de l'utilisateur. */
+    suspend fun resolveSpotifyTrackId(track: Track): Result<String?> = withBearer { bearer ->
+        runCatching {
+            (track.source as? TrackSource.Spotify)?.spotifyTrackId ?: run {
+                val query = "track:${track.title} artist:${track.artist}"
+                val res = SpotifyApiClientFactory.web.search(query, bearer, limit = 10)
+                if (!res.isSuccessful) error("Recherche Spotify indisponible (${res.code()})")
+                val wantedTitle = normalize(track.title)
+                val wantedArtist = normalize(track.artist)
+                res.body()?.tracks?.items.orEmpty()
+                    .firstOrNull { candidate ->
+                        normalize(candidate.name) == wantedTitle &&
+                            candidate.artists.any { normalize(it.name) == wantedArtist }
+                    }
+                    ?.id
+            }
+        }
+    }
+
     override suspend fun resolvePlayableUri(track: Track): Result<String> =
         Result.failure(
             UnsupportedOperationException(
@@ -146,6 +167,25 @@ class SpotifyProvider(
                 offset += page.size
             } while (page.size == 50)
             tracks
+        }
+    }
+
+    /** Identifiants des playlists réellement possédées par le compte lié. Les
+     * playlists simplement suivies ne doivent jamais être modifiées par une sync. */
+    suspend fun ownedPlaylistIds(): Result<Set<String>> = withBearer { bearer ->
+        runCatching {
+            val me = SpotifyApiClientFactory.web.me(bearer).body()?.id
+                ?: error("Profil Spotify indisponible")
+            val ownedIds = mutableSetOf<String>()
+            var offset = 0
+            do {
+                val res = SpotifyApiClientFactory.web.myPlaylists(bearer, limit = 50, offset = offset)
+                if (!res.isSuccessful) error("Playlists Spotify indisponibles (${res.code()})")
+                val page = res.body()?.items.orEmpty()
+                ownedIds += page.filter { it.owner?.id == me }.map { it.id }
+                offset += page.size
+            } while (page.size == 50)
+            ownedIds
         }
     }
 
@@ -193,4 +233,7 @@ class SpotifyProvider(
             source = TrackSource.Spotify(id),
         )
     }
+
+    private fun normalize(value: String): String =
+        value.lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
 }

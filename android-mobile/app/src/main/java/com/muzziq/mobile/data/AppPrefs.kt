@@ -28,6 +28,10 @@ class AppPrefs(private val context: Context) {
         val ONBOARDED = booleanPreferencesKey("onboarded")
         val SERVER_CONNECTION_STATE = stringPreferencesKey("server_connection_state")
         val SAVED_SERVER_URLS = stringSetPreferencesKey("saved_server_urls")
+        // Fichiers découverts par MediaStore sur le téléphone uniquement. Les
+        // téléchargements MuzziQ/Movviz sont des TrackSource.Server et ne passent
+        // jamais par ce réglage.
+        val SHOW_DEVICE_LOCAL_TRACKS = booleanPreferencesKey("show_device_local_tracks")
     }
 
     val mode: Flow<AppMode> = context.dataStore.data.map { prefs ->
@@ -54,6 +58,13 @@ class AppPrefs(private val context: Context) {
     }
     val sessionCookie: Flow<String?> = context.dataStore.data.map { it[Keys.SESSION_COOKIE] }
     val onboarded: Flow<Boolean> = context.dataStore.data.map { it[Keys.ONBOARDED] ?: false }
+    val showDeviceLocalTracks: Flow<Boolean> = context.dataStore.data.map {
+        it[Keys.SHOW_DEVICE_LOCAL_TRACKS] ?: true
+    }
+
+    suspend fun setShowDeviceLocalTracks(show: Boolean) {
+        context.dataStore.edit { it[Keys.SHOW_DEVICE_LOCAL_TRACKS] = show }
+    }
 
     suspend fun setStandalone() {
         context.dataStore.edit {

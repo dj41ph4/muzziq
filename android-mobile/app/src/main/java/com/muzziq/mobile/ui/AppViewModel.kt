@@ -104,6 +104,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _library = MutableStateFlow<List<Track>>(emptyList())
     val library: StateFlow<List<Track>> = _library.asStateFlow()
+    /** Source complète : masquer les MP3 du téléphone ne touche ni aux favoris ni
+     * aux téléchargements Movviz/MuzziQ (qui sont des sources serveur). */
+    private val _unfilteredLibrary = MutableStateFlow<List<Track>>(emptyList())
+    val showDeviceLocalTracks: StateFlow<Boolean> = prefs.showDeviceLocalTracks
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     /** Rangées Home (§46) — moteur serveur en mode Lié, moteur catalogue local +
      * YouTube Music direct en standalone. Dans les deux cas, l'écran d'accueil
@@ -273,21 +278,46 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Synchronisation additive et explicite : les titres likés Spotify deviennent
-     * des titres likés MuzziQ. Les favoris locaux non identifiés Spotify ne sont
-     * jamais envoyés au hasard vers le catalogue Spotify. Pour les titres Spotify,
-     * le bouton cœur reste bidirectionnel en temps réel. */
+    /** Synchronisation bidirectionnelle non destructive : l'union des favoris est
+     * conservée des deux côtés. Un fichier local n'est exporté que lorsqu'une
+     * correspondance exacte titre + artiste est trouvée chez Spotify. */
     fun syncSpotifyFavorites() {
         if (_spotifyAccount.value !is SpotifyAccountUiState.Connected || _spotifyBusy.value) return
         viewModelScope.launch {
             _spotifyBusy.value = true
-            spotifyProvider.library()
-                .onSuccess { remote ->
-                    remote.forEach { track -> favorites.setFavorite(track.id, true) }
-                    _spotifyError.value = null
-                    refreshLibrary()
+            _spotifyError.value = null
+            val remote = spotifyProvider.library().getOrElse {
+                _spotifyError.value = "Synchronisation Spotify échouée : ${it.message}"
+                _spotifyBusy.value = false
+                return@launch
+            }
+
+            remote.forEach { track -> favorites.setFavorite(track.id, true) }
+            val remoteIds = remote.mapNotNull { (it.source as? TrackSource.Spotify)?.spotifyTrackId }.toSet()
+            val favoriteIds = favoriteTrackIds.value
+            val toExport = _unfilteredLibrary.value.filter { it.id in favoriteIds }
+            val spotifyIdsToSave = mutableListOf<String>()
+            var unmatched = 0
+            toExport.forEach { track ->
+                val spotifyId = spotifyProvider.resolveSpotifyTrackId(track).getOrNull()
+                when {
+                    spotifyId == null -> unmatched++
+                    spotifyId !in remoteIds -> spotifyIdsToSave += spotifyId
                 }
-                .onFailure { _spotifyError.value = "Synchronisation Spotify échouée : ${it.message}" }
+            }
+            val export = spotifyProvider.saveTracks(spotifyIdsToSave.distinct())
+            if (export.isFailure) {
+                _spotifyError.value = "Import Spotify terminé, mais export des favoris échoué : ${export.exceptionOrNull()?.message}"
+            } else {
+                _spotifyError.value = buildString {
+                    append("Favoris synchronisés : ${remote.size} importés, ${spotifyIdsToSave.distinct().size} ajoutés à Spotify.")
+                    if (unmatched > 0) append(" $unmatched titre(s) MuzziQ sans correspondance exacte n'ont pas été envoyés.")
+                }
+            }
+            linkedAccountDao.byProvider("SPOTIFY")?.let { account ->
+                linkedAccountDao.upsert(account.copy(lastSyncAt = System.currentTimeMillis(), status = "CONNECTED"))
+            }
+            refreshLibrary()
             _spotifyBusy.value = false
         }
     }
@@ -323,9 +353,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Playlists (plan §6/§66/§67) — RoomPlaylistRepository en standalone,
      * ServerPlaylistRepository en mode Lié, choisi/instancié dans activateStandalone/
      * activateLinked comme les téléchargements ([playlistRepository], exclusif LOCAL/
-     * SERVER, seul backend capable de créer/modifier). Spotify (spotifyProvider,
-     * lecture seule) s'ajoute par-dessus quand un compte est connecté — cumulatif
-     * (§67), jamais fusionné avec une playlist de même nom (§58, voir
+     * SERVER, seul backend capable de créer/modifier). Spotify s'ajoute par-dessus
+     * quand un compte est connecté — cumulatif ; les synchronisations explicites
+     * fusionnent les playlists homonymes sans suppression automatique (voir
      * PlaylistSummary.provider). [playlistRepositoryFor] route chaque action vers le
      * bon backend selon la provenance réelle de la playlist ciblée. */
     private var playlistRepository: PlaylistRepository? = null
@@ -362,7 +392,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun createPlaylist(name: String) {
-        // Spotify ne peut jamais créer (lecture seule) — toujours le repo primaire.
+        // Une création depuis l'écran Playlists reste MuzziQ ; le bouton de sync
+        // crée la contrepartie Spotify sans transformer cette action locale en réseau.
         val repo = playlistRepository ?: return
         if (name.isBlank()) return
         viewModelScope.launch {
@@ -402,7 +433,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun addToPlaylist(playlistId: String, track: Track) {
         val repo = playlistRepositoryFor(playlistId) ?: return
         viewModelScope.launch {
-            repo.addTrackToPlaylist(playlistId, track)
+            val trackForTarget = if (repo === spotifyProvider) {
+                val spotifyId = spotifyProvider.resolveSpotifyTrackId(track).getOrNull()
+                if (spotifyId == null) {
+                    _error.value = "Ce morceau n'a pas de correspondance Spotify exacte."
+                    return@launch
+                }
+                track.copy(id = spotifyId, source = TrackSource.Spotify(spotifyId))
+            } else track
+            repo.addTrackToPlaylist(playlistId, trackForTarget)
                 .onSuccess {
                     if (_openPlaylistId.value == playlistId) openPlaylist(playlistId)
                     refreshPlaylists()
@@ -585,6 +624,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
         player.connect()
         viewModelScope.launch {
+            prefs.showDeviceLocalTracks.collect { applyDeviceLocalVisibility() }
+        }
+        viewModelScope.launch {
             prefs.serverConnectionState.collect { updateConnectionState(it) }
         }
         viewModelScope.launch {
@@ -636,6 +678,94 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             prefs.setLinked(normalizedUrl)
             activateLinked(normalizedUrl)
             _busy.value = false
+        }
+    }
+
+    /** Fusion manuelle des playlists : aucun retrait automatique, donc aucun risque
+     * d'effacer une playlist sur Spotify ou MuzziQ. Les playlists MuzziQ sont créées
+     * chez Spotify si besoin et reçoivent les morceaux résolus exactement ; en mode
+     * standalone, les playlists Spotify absentes sont aussi importées dans Room. */
+    fun syncSpotifyPlaylists() {
+        if (_spotifyAccount.value !is SpotifyAccountUiState.Connected || _spotifyBusy.value) return
+        val primary = playlistRepository ?: return
+        viewModelScope.launch {
+            _spotifyBusy.value = true
+            _spotifyError.value = null
+            val remote = spotifyProvider.playlists().getOrElse {
+                _spotifyError.value = "Synchronisation des playlists échouée : ${it.message}"
+                _spotifyBusy.value = false
+                return@launch
+            }
+            val ownedRemoteIds = spotifyProvider.ownedPlaylistIds().getOrElse {
+                _spotifyError.value = "Impossible d'identifier tes playlists Spotify : ${it.message}"
+                _spotifyBusy.value = false
+                return@launch
+            }
+            val local = primary.playlists().getOrElse {
+                _spotifyError.value = "Lecture des playlists MuzziQ échouée : ${it.message}"
+                _spotifyBusy.value = false
+                return@launch
+            }
+            val ownRemoteByName = remote
+                .filter { it.provider == MusicProviderId.SPOTIFY }
+                // Les playlists suivies restent lisibles/importables, mais MuzziQ ne
+                // les modifie jamais : seules celles du compte lié sont écrites.
+                .filter { it.id in ownedRemoteIds }
+                .associateBy { it.name.trim().lowercase() }
+
+            var createdRemote = 0
+            var exportedTracks = 0
+            var unmatched = 0
+            local.forEach { playlist ->
+                val key = playlist.name.trim().lowercase()
+                val remotePlaylist = ownRemoteByName[key]
+                    ?: spotifyProvider.createPlaylist(playlist.name).getOrNull()?.also { createdRemote++ }
+                    ?: return@forEach
+                val remoteTrackIds = spotifyProvider.playlistTracks(remotePlaylist.id).getOrNull()
+                    .orEmpty()
+                    .mapNotNull { (it.source as? TrackSource.Spotify)?.spotifyTrackId }
+                    .toMutableSet()
+                primary.playlistTracks(playlist.id).getOrNull().orEmpty().forEach { track ->
+                    val spotifyId = spotifyProvider.resolveSpotifyTrackId(track).getOrNull()
+                    if (spotifyId == null) {
+                        unmatched++
+                    } else if (spotifyId !in remoteTrackIds) {
+                        val spotifyTrack = track.copy(id = spotifyId, source = TrackSource.Spotify(spotifyId))
+                        if (spotifyProvider.addTrackToPlaylist(remotePlaylist.id, spotifyTrack).isSuccess) {
+                            remoteTrackIds += spotifyId
+                            exportedTracks++
+                        }
+                    }
+                }
+            }
+
+            var importedPlaylists = 0
+            var importedTracks = 0
+            if (primary is RoomPlaylistRepository) {
+                val localByName = local.associateBy { it.name.trim().lowercase() }.toMutableMap()
+                remote.forEach { playlist ->
+                    val key = playlist.name.trim().lowercase()
+                    val target = localByName[key] ?: primary.createPlaylist(playlist.name).getOrNull()?.also {
+                        localByName[key] = it
+                        importedPlaylists++
+                    } ?: return@forEach
+                    val existing = primary.playlistTracks(target.id).getOrNull().orEmpty()
+                        .mapNotNull { (it.source as? TrackSource.Spotify)?.spotifyTrackId }.toSet()
+                    spotifyProvider.playlistTracks(playlist.id).getOrNull().orEmpty()
+                        .filter { (it.source as? TrackSource.Spotify)?.spotifyTrackId !in existing }
+                        .forEach { track ->
+                            if (primary.addTrackToPlaylist(target.id, track).isSuccess) importedTracks++
+                        }
+                }
+            }
+            _spotifyError.value = buildString {
+                append("Playlists synchronisées : $createdRemote créée(s), $exportedTracks morceau(x) envoyés")
+                if (primary is RoomPlaylistRepository) append(", $importedPlaylists playlist(s) et $importedTracks morceau(x) importés")
+                if (unmatched > 0) append(". $unmatched morceau(x) sans correspondance Spotify ont été ignorés")
+                append('.')
+            }
+            refreshPlaylists()
+            _spotifyBusy.value = false
         }
     }
 
@@ -845,7 +975,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _error.value = results.first().exceptionOrNull()?.message
                 return@launch
             }
-            _library.value = results.mapNotNull { it.getOrNull() }.flatten()
+            _unfilteredLibrary.value = results.mapNotNull { it.getOrNull() }.flatten()
+            applyDeviceLocalVisibility()
+        }
+    }
+
+    fun setShowDeviceLocalTracks(show: Boolean) {
+        viewModelScope.launch { prefs.setShowDeviceLocalTracks(show) }
+    }
+
+    private fun applyDeviceLocalVisibility() {
+        _library.value = _unfilteredLibrary.value.filter {
+            showDeviceLocalTracks.value || it.source !is TrackSource.Local
         }
     }
 
