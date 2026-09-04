@@ -20,9 +20,9 @@ val spotifyClientId = run {
     val props = Properties()
     val propsFile = rootProject.file("spotify.properties")
     if (propsFile.exists()) propsFile.inputStream().use { props.load(it) }
-    System.getenv("MUZZIQ_SPOTIFY_CLIENT_ID")
-        ?: (project.findProperty("muzziqSpotifyClientId") as String?)
-        ?: props.getProperty("clientId")
+    System.getenv("MUZZIQ_SPOTIFY_CLIENT_ID")?.takeIf { it.isNotBlank() }
+        ?: (project.findProperty("muzziqSpotifyClientId") as String?)?.takeIf { it.isNotBlank() }
+        ?: props.getProperty("clientId")?.takeIf { it.isNotBlank() }
         // Un client_id OAuth pour une application native PKCE est public par
         // conception : il est embarqué dans l'APK, sans client_secret. Garder
         // cette valeur ici rend aussi les builds tagués reproductibles si le
