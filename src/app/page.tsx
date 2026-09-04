@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { Logo } from "@/components/Logo";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -10,6 +11,7 @@ export default function Home() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center gap-6 px-6 text-center">
+      <Logo size="lg" animated={false} />
       <h1 className="text-4xl font-bold tracking-tight">MuzziQ</h1>
       <p className="text-[var(--ink-soft)]">
         Fondation Phase A — boot, settings, health. Aucun provider branché pour l&apos;instant.

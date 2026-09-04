@@ -1,13 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Music2 } from "lucide-react";
 
 /**
- * Marque MuzziQ — même traitement que l'AnimatedLogo Movviz (orbite de
- * particules, anneaux ripple, halo, respiration), transposé en vert
- * (identité MuzziQ) avec une note de musique au lieu du clap de cinéma.
- * Réutilisation directe du mécanisme, pas du contenu (§1.1 du plan).
+ * Marque officielle MuzziQ.
+ *
+ * Le symbole reprend exactement le vecteur déjà utilisé par l'application
+ * Android : cercle noir + forme verte. Les anneaux, le halo et la respiration
+ * restent des effets d'interface autour du symbole ; ils ne modifient jamais
+ * le logo lui-même.
  */
 
 const ORBIT_PARTICLES = [
@@ -17,9 +18,9 @@ const ORBIT_PARTICLES = [
 ];
 
 const SIZES = {
-  sm: { outer: "h-9 w-9", inner: "h-9 w-9", icon: 16 },
-  md: { outer: "h-12 w-12", inner: "h-10 w-10", icon: 19 },
-  lg: { outer: "h-16 w-16", inner: "h-13 w-13", icon: 26 },
+  sm: { outer: "h-9 w-9", mark: "h-8 w-8" },
+  md: { outer: "h-12 w-12", mark: "h-11 w-11" },
+  lg: { outer: "h-16 w-16", mark: "h-15 w-15" },
 } as const;
 
 export function Logo({ size = "md", animated = true }: { size?: keyof typeof SIZES; animated?: boolean }) {
@@ -53,18 +54,32 @@ export function Logo({ size = "md", animated = true }: { size?: keyof typeof SIZ
           </div>
         ))}
       {animated ? (
-        <motion.div
-          className={`brand-gradient flex items-center justify-center rounded-2xl shadow-[0_4px_20px_-4px_var(--brand-glow)] ${s.inner}`}
+        <motion.svg
+          viewBox="0 0 108 108"
+          aria-hidden="true"
+          className={`drop-shadow-[0_4px_20px_var(--brand-glow)] ${s.mark}`}
           animate={{ scale: [1, 1.05, 1] }}
           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         >
-          <Music2 size={s.icon} className="text-black" strokeWidth={2.5} />
-        </motion.div>
+          <OfficialMark />
+        </motion.svg>
       ) : (
-        <div className={`brand-gradient flex items-center justify-center rounded-2xl shadow-[0_4px_20px_-4px_var(--brand-glow)] ${s.inner}`}>
-          <Music2 size={s.icon} className="text-black" strokeWidth={2.5} />
-        </div>
+        <svg viewBox="0 0 108 108" aria-hidden="true" className={`drop-shadow-[0_4px_20px_var(--brand-glow)] ${s.mark}`}>
+          <OfficialMark />
+        </svg>
       )}
     </div>
+  );
+}
+
+function OfficialMark() {
+  return (
+    <>
+      <circle cx="54" cy="54" r="44" fill="#0A0A0C" />
+      <path
+        fill="#1ED760"
+        d="M54,24 C40,24 29,35 29,49 C29,63 40,74 54,74 C63,74 71,68 74,60 L74,84 C74,89 78,93 83,93 C88,93 92,89 92,84 L92,30 C92,26 89,24 85,24 L54,24 Z M54,66 C44,66 37,58.5 37,49 C37,39.5 44,32 54,32 C64,32 71,39.5 71,49 C71,58.5 64,66 54,66 Z"
+      />
+    </>
   );
 }
