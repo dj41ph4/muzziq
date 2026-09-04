@@ -84,6 +84,10 @@ data class AlbumUi(val id: String, val title: String, val artist: String, val tr
 sealed interface SpotifyAccountUiState {
     data object NotConfigured : SpotifyAccountUiState
     data object Disconnected : SpotifyAccountUiState
+    /** OAuth a bien délivré et MuzziQ conserve un jeton chiffré, mais Spotify a
+     * refusé la première requête Web API. Il ne faut jamais faire croire que le
+     * bouton de liaison n'a rien fait dans ce cas. */
+    data object AuthorizedButApiUnavailable : SpotifyAccountUiState
     data class Connected(val displayName: String?, val avatarUrl: String?) : SpotifyAccountUiState
 }
 
@@ -541,7 +545,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val profile = spotifyProvider.profile()
             val identity = profile.getOrNull()
             if (identity == null) {
-                _spotifyError.value = "Connecté mais profil Spotify illisible : ${profile.exceptionOrNull()?.message}"
+                // L'échange PKCE est déjà réussi ici : garder cet état et les jetons
+                // est nécessaire pour que l'utilisateur voie que son compte est bien
+                // autorisé, même lorsqu'une politique Spotify bloque /v1/me.
+                _spotifyAccount.value = SpotifyAccountUiState.AuthorizedButApiUnavailable
+                _spotifyError.value = "Compte Spotify autorisé, mais l'API Web a refusé l'accès au profil : ${profile.exceptionOrNull()?.message}"
                 _spotifyBusy.value = false
                 return@launch
             }
@@ -611,10 +619,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         val account = linkedAccountDao.byProvider("SPOTIFY")
-        _spotifyAccount.value = SpotifyAccountUiState.Connected(account?.displayName, account?.avatarUrl)
-        registerSpotifyProvider()
-        refreshLibrary()
-        refreshPlaylists()
+        if (account == null) {
+            // Un jeton sans profil provient d'une autorisation OAuth réussie dont
+            // l'accès Web API a été bloqué. Ne pas l'afficher comme déconnecté.
+            _spotifyAccount.value = SpotifyAccountUiState.AuthorizedButApiUnavailable
+        } else {
+            _spotifyAccount.value = SpotifyAccountUiState.Connected(account.displayName, account.avatarUrl)
+            registerSpotifyProvider()
+            refreshLibrary()
+            refreshPlaylists()
+        }
     }
 
     init {

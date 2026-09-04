@@ -169,9 +169,11 @@ private fun ServerRow(url: String, active: Boolean, onSelect: () -> Unit, onRemo
 
 @Composable
 private fun SpotifyAccountCard(account: SpotifyAccountUiState, busy: Boolean, error: String?, onConnect: () -> Unit, onDisconnect: () -> Unit, onSyncFavorites: () -> Unit, onSyncPlaylists: () -> Unit) {
+    val connected = account as? SpotifyAccountUiState.Connected
+    val authorizedButUnavailable = account is SpotifyAccountUiState.AuthorizedButApiUnavailable
+    val linked = connected != null || authorizedButUnavailable
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(MuzziQColors.Surface.copy(alpha = 0.94f)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            val connected = account as? SpotifyAccountUiState.Connected
             if (connected?.avatarUrl != null) AsyncImage(connected.avatarUrl, contentDescription = null, modifier = Modifier.size(42.dp).clip(CircleShape))
             else Box(Modifier.size(42.dp).clip(CircleShape).background(MuzziQColors.SurfaceRaised), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.MusicNote, null, tint = MuzziQColors.TextMuted) }
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
@@ -179,6 +181,7 @@ private fun SpotifyAccountCard(account: SpotifyAccountUiState, busy: Boolean, er
                 Text(
                     when {
                         connected != null -> connected.displayName ?: "Connecté"
+                        authorizedButUnavailable -> "Compte lié — API Spotify indisponible"
                         account is SpotifyAccountUiState.NotConfigured -> "Configuration développeur requise"
                         else -> "Prêt à connecter ta bibliothèque"
                     },
@@ -186,12 +189,14 @@ private fun SpotifyAccountCard(account: SpotifyAccountUiState, busy: Boolean, er
                     fontSize = 12.sp,
                 )
             }
-            if (connected != null) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MuzziQColors.Brand)
+            if (linked) Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MuzziQColors.Brand)
         }
         if (account is SpotifyAccountUiState.NotConfigured) {
             Text("Le connecteur Spotify n'est pas inclus dans cette build. Une build officielle configurée permettra une connexion en un clic et la synchronisation des titres likés, sans télécharger les flux Spotify.", color = MuzziQColors.TextMuted, fontSize = 12.sp, lineHeight = 17.sp)
+        } else if (authorizedButUnavailable) {
+            Text("La connexion OAuth a réussi et le jeton est conservé dans le coffre chiffré. Spotify bloque actuellement l'accès Web API à ce compte : les favoris et playlists ne peuvent pas encore être synchronisés.", color = MuzziQColors.TextMuted, fontSize = 12.sp, lineHeight = 17.sp)
         } else if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = MuzziQColors.Brand, strokeWidth = 2.dp)
-        else Button(onClick = if (account is SpotifyAccountUiState.Connected) onDisconnect else onConnect, modifier = Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.SurfaceRaised, contentColor = MuzziQColors.TextPrimary)) { Text(if (account is SpotifyAccountUiState.Connected) "Déconnecter" else "Lier mon compte Spotify", fontWeight = FontWeight.SemiBold) }
+        else Button(onClick = if (linked) onDisconnect else onConnect, modifier = Modifier.fillMaxWidth().height(44.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.SurfaceRaised, contentColor = MuzziQColors.TextPrimary)) { Text(if (linked) "Déconnecter" else "Lier mon compte Spotify", fontWeight = FontWeight.SemiBold) }
         if (account is SpotifyAccountUiState.Connected && !busy) {
             TextButton(onClick = onSyncFavorites, modifier = Modifier.fillMaxWidth()) {
                 Text("Synchroniser les titres likés (dans les deux sens)", color = MuzziQColors.Brand, fontWeight = FontWeight.Bold)
