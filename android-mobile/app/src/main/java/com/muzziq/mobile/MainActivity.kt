@@ -482,6 +482,11 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                         onDisconnectSpotify = { vm.disconnectSpotify() },
                         onSyncSpotifyFavorites = { vm.syncSpotifyFavorites() },
                         onSyncSpotifyPlaylists = { vm.syncSpotifyPlaylists() },
+                        onOpenPlexSettings = {
+                            serverUrl?.trimEnd('/')?.let { baseUrl ->
+                                CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse("$baseUrl/settings/plex"))
+                            }
+                        },
                         showDeviceLocalTracks = showDeviceLocalTracks,
                         onShowDeviceLocalTracksChanged = vm::setShowDeviceLocalTracks,
                     )

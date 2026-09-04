@@ -77,6 +77,7 @@ fun SettingsScreen(
     onDisconnectSpotify: () -> Unit,
     onSyncSpotifyFavorites: () -> Unit = {},
     onSyncSpotifyPlaylists: () -> Unit = {},
+    onOpenPlexSettings: () -> Unit = {},
     showDeviceLocalTracks: Boolean,
     onShowDeviceLocalTracksChanged: (Boolean) -> Unit,
 ) {
@@ -134,6 +135,12 @@ fun SettingsScreen(
 
             SettingsSectionLabel("COMPTES")
             SpotifyAccountCard(spotifyAccount, spotifyBusy, spotifyError, onConnectSpotify, onDisconnectSpotify, onSyncSpotifyFavorites, onSyncSpotifyPlaylists)
+
+            SettingsSectionLabel("SYNCHRONISATIONS")
+            PlexSyncCard(
+                available = mode == AppMode.LINKED && !serverUrl.isNullOrBlank(),
+                onOpen = onOpenPlexSettings,
+            )
 
             SettingsSectionLabel("BIBLIOTHÈQUE")
             Row(
@@ -206,5 +213,51 @@ private fun SpotifyAccountCard(account: SpotifyAccountUiState, busy: Boolean, er
             }
         }
         if (error != null) Text(error, color = if (error.startsWith("Favoris synchronisés") || error.startsWith("Playlists synchronisées")) MuzziQColors.Brand else Color(0xFFFF7F88), fontSize = 12.sp)
+    }
+}
+
+/** Plex reste une intégration du serveur : l'APK n'envoie jamais de flux Plex au
+ * lecteur. Cette entrée ouvre la page qui relie le compte et synchronise seulement
+ * les playlists/métadonnées dans les deux sens. */
+@Composable
+private fun PlexSyncCard(available: Boolean, onOpen: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MuzziQColors.Surface.copy(alpha = 0.94f))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(42.dp).clip(CircleShape).background(MuzziQColors.Brand.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.CloudQueue, contentDescription = null, tint = MuzziQColors.Brand)
+            }
+            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                Text("Plex", color = MuzziQColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    if (available) "Synchroniser les playlists et les titres liés"
+                    else "Connecte un serveur MuzziQ pour lier Plex",
+                    color = MuzziQColors.TextMuted,
+                    fontSize = 12.sp,
+                )
+            }
+            if (available) Icon(Icons.Rounded.Link, contentDescription = "Ouvrir Plex", tint = MuzziQColors.Brand)
+        }
+        Text(
+            "Import et export de playlists, sans lire ni télécharger la musique depuis Plex.",
+            color = MuzziQColors.TextMuted,
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+        )
+        Button(
+            onClick = onOpen,
+            enabled = available,
+            modifier = Modifier.fillMaxWidth().height(44.dp),
+            shape = RoundedCornerShape(13.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MuzziQColors.SurfaceRaised, contentColor = MuzziQColors.TextPrimary),
+        ) {
+            Text("Configurer Plex et synchroniser", fontWeight = FontWeight.SemiBold)
+        }
     }
 }
