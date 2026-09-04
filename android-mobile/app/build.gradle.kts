@@ -23,7 +23,11 @@ val spotifyClientId = run {
     System.getenv("MUZZIQ_SPOTIFY_CLIENT_ID")
         ?: (project.findProperty("muzziqSpotifyClientId") as String?)
         ?: props.getProperty("clientId")
-        ?: ""
+        // Un client_id OAuth pour une application native PKCE est public par
+        // conception : il est embarqué dans l'APK, sans client_secret. Garder
+        // cette valeur ici rend aussi les builds tagués reproductibles si le
+        // secret GitHub Actions est absent ou momentanément inaccessible.
+        ?: "68fa21f54d9e49dd818e0e596643e1d9"
 }
 
 android {
