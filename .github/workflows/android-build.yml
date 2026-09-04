@@ -12,12 +12,9 @@ run-name: Build Android — ${{ github.ref_name }}
 # côté GitHub, pas modifiable depuis ce dépôt) : ajouter quatre secrets dans
 # Settings > Secrets and variables > Actions du dépôt GitHub —
 # MUZZIQ_ANDROID_KEYSTORE_B64, MUZZIQ_ANDROID_KEYSTORE_PASSWORD,
-# MUZZIQ_ANDROID_KEY_ALIAS, MUZZIQ_ANDROID_KEY_PASSWORD. Sans ces secrets, ce
-# workflow génère une clé de CI éphémère (build non signé de façon stable —
-# chaque run produit un APK signé différemment, l'installation écrasera
-# l'appli existante au lieu de la mettre à jour) plutôt que d'échouer —
-# jamais testé avec une vraie clé retail dans cet environnement (ni SDK
-# Android, ni gradle, ni accès à un compte GitHub Actions ici).
+# MUZZIQ_ANDROID_KEY_ALIAS, MUZZIQ_ANDROID_KEY_PASSWORD. Le workflow refuse
+# désormais de publier si l'un manque : une clé éphémère changerait le SHA-1
+# retail et empêcherait Spotify de reconnaître l'APK suivante.
 on:
   push:
     branches: [master]
@@ -83,18 +80,18 @@ jobs:
           key_dir="$RUNNER_TEMP/muzziq-signing"
           mkdir -p "$key_dir"
           keystore="$key_dir/muzziq-release.jks"
-          store_password="${ANDROID_KEYSTORE_PASSWORD:-muzziq-ci-release-only}"
-          key_alias="${ANDROID_KEY_ALIAS:-muzziq-release}"
-          key_password="${ANDROID_KEY_PASSWORD:-$store_password}"
-          if [ -n "${ANDROID_KEYSTORE_B64:-}" ]; then
-            printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$keystore"
-          else
-            echo "::warning::Secrets de signature release absents — génération d'une clé de CI éphémère (pas de mise à jour propre d'un APK déjà installé avec une vraie clé)."
-            keytool -genkeypair -v -keystore "$keystore" -storetype PKCS12 -alias "$key_alias" \
-              -keyalg RSA -keysize 4096 -validity 10000 \
-              -storepass "$store_password" -keypass "$key_password" \
-              -dname "CN=MuzziQ, OU=Android, O=MuzziQ, C=FR"
+          if [ -z "${ANDROID_KEYSTORE_B64:-}" ] || [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ] || \
+             [ -z "${ANDROID_KEY_ALIAS:-}" ] || [ -z "${ANDROID_KEY_PASSWORD:-}" ]; then
+            echo "::error::Secrets de signature retail manquants. Configure MUZZIQ_ANDROID_KEYSTORE_B64, MUZZIQ_ANDROID_KEYSTORE_PASSWORD, MUZZIQ_ANDROID_KEY_ALIAS et MUZZIQ_ANDROID_KEY_PASSWORD avant de publier une release."
+            exit 1
           fi
+          store_password="$ANDROID_KEYSTORE_PASSWORD"
+          key_alias="$ANDROID_KEY_ALIAS"
+          key_password="$ANDROID_KEY_PASSWORD"
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$keystore"
+          echo "Certificat release utilisé par cette build :"
+          keytool -list -v -keystore "$keystore" -alias "$key_alias" -storepass "$store_password" \
+            | grep -E 'Alias name:|SHA1:|SHA-256:'
           printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$keystore" "$store_password" "$key_alias" "$key_password" > android-mobile/keystore.properties
 

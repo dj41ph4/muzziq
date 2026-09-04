@@ -45,6 +45,9 @@ import com.muzziq.mobile.standalone.HistoryEntry
 import com.muzziq.mobile.standalone.MigrationManager
 import com.muzziq.mobile.standalone.StandaloneMusicSource
 import com.muzziq.mobile.standalone.StandaloneMusicSourceHolder
+import java.io.PrintWriter
+import java.net.InetAddress
+import java.net.ServerSocket
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -56,7 +59,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed interface RootUiState {
     data object Loading : RootUiState
@@ -440,33 +445,98 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _spotifyError = MutableStateFlow<String?>(null)
     val spotifyError: StateFlow<String?> = _spotifyError.asStateFlow()
 
-    /** `code_verifier`/`state` PKCE de la tentative en cours — vit en mémoire process
-     * (pas Room, pas DataStore : jamais un secret persistant, jamais utile après le
-     * round-trip Custom Tab). Si le process est tué pendant le trajet Custom Tab
+    /** `code_verifier`/`state` + serveur loopback de la tentative en cours — vit en
+     * mémoire process (pas Room, pas DataStore : jamais un secret persistant, jamais
+     * utile après le retour Chrome). Si le process est tué pendant le trajet Chrome
      * (mémoire système basse), la tentative est simplement perdue et l'utilisateur
-     * retape "Connecter" — pas de crash, pas de faux succès. Non vérifiable sans
-     * appareil réel (voir commentaire de tête de SpotifyAuthManager.kt). */
-    private data class PendingSpotifyAuth(val verifier: String, val state: String)
+     * retape "Connecter" — pas de crash, pas de faux succès. */
+    private data class PendingSpotifyAuth(
+        val verifier: String,
+        val state: String,
+        val redirectUri: String,
+        val server: ServerSocket,
+    )
     private var pendingSpotifyAuth: PendingSpotifyAuth? = null
 
-    /** URL Custom Tab à ouvrir — null si aucun Client ID configuré (SettingsScreen ne
-     * doit jamais appeler ceci sans vérifier `spotifyAccount != NotConfigured` avant). */
+    /** URL à ouvrir dans Chrome/Custom Tab — null si aucun Client ID configuré ou si
+     * le port loopback local ne peut pas être ouvert. Le port est éphémère et n'est
+     * jamais exposé au réseau local : Spotify revient directement sur ce téléphone. */
     fun spotifyLoginUri(): Uri? {
         if (!spotifyAuthManager.isConfigured()) return null
         _spotifyError.value = null
+        pendingSpotifyAuth?.server?.close()
+
+        val server = try {
+            ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+        } catch (error: Throwable) {
+            _spotifyError.value = "Impossible de préparer le retour Spotify local : ${error.message}"
+            return null
+        }
+
         val verifier = spotifyAuthManager.generateCodeVerifier()
         val challenge = spotifyAuthManager.codeChallengeFor(verifier)
         val state = UUID.randomUUID().toString()
-        pendingSpotifyAuth = PendingSpotifyAuth(verifier, state)
-        return spotifyAuthManager.buildAuthorizationUri(challenge, state)
+        val redirectUri = "http://127.0.0.1:${server.localPort}"
+        pendingSpotifyAuth = PendingSpotifyAuth(verifier, state, redirectUri, server)
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                server.soTimeout = 120_000
+                val socket = server.accept()
+                socket.soTimeout = 15_000
+                val requestLine = socket.getInputStream().bufferedReader().readLine()
+                val target = requestLine?.split(' ')?.getOrNull(1)
+                val callback = target
+                    ?.takeIf { it.startsWith("/") }
+                    ?.let { Uri.parse("http://127.0.0.1$it") }
+                val responseBody = if (callback?.getQueryParameter("error") == null) {
+                    "<html><head><meta name=\"viewport\" content=\"width=device-width\"></head>" +
+                        "<body style=\"font-family:sans-serif;text-align:center;padding:32px\">" +
+                        "<h2>Connexion Spotify réussie</h2>" +
+                        "<p>Tu peux revenir dans MuzziQ.</p></body></html>"
+                } else {
+                    "<html><head><meta name=\"viewport\" content=\"width=device-width\"></head>" +
+                        "<body style=\"font-family:sans-serif;text-align:center;padding:32px\">" +
+                        "<h2>Connexion Spotify annulée</h2>" +
+                        "<p>Tu peux revenir dans MuzziQ.</p></body></html>"
+                }
+                val bodyBytes = responseBody.toByteArray(Charsets.UTF_8)
+                PrintWriter(socket.getOutputStream()).use { output ->
+                    output.print(
+                        "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: text/html; charset=utf-8\r\n" +
+                            "Connection: close\r\n" +
+                            "Content-Length: ${bodyBytes.size}\r\n\r\n" +
+                            responseBody,
+                    )
+                    output.flush()
+                }
+                socket.close()
+                if (callback != null) {
+                    withContext(Dispatchers.Main.immediate) { handleSpotifyCallback(callback) }
+                }
+            } catch (error: Throwable) {
+                if (pendingSpotifyAuth?.server === server) {
+                    withContext(Dispatchers.Main.immediate) {
+                        pendingSpotifyAuth = null
+                        _spotifyError.value = "Connexion Spotify interrompue : ${error.message}"
+                    }
+                }
+            } finally {
+                server.close()
+            }
+        }
+
+        return spotifyAuthManager.buildAuthorizationUri(challenge, state, redirectUri)
     }
 
-    /** Reçoit l'URI `muzziq://spotify-callback?...` capturée par MainActivity. Ignore
-     * silencieusement tout appel sans tentative en cours (pendingSpotifyAuth == null) —
-     * un deep link rejoué ou un intent parasite ne doit jamais déclencher d'échange. */
+    /** Traite le retour local reçu par le mini-serveur loopback. Ignore silencieusement
+     * tout appel sans tentative en cours : une réponse rejouée ne doit jamais déclencher
+     * d'échange. */
     fun handleSpotifyCallback(uri: Uri) {
         val pending = pendingSpotifyAuth ?: return
         pendingSpotifyAuth = null
+        pending.server.close()
 
         val authError = uri.getQueryParameter("error")
         if (authError != null) {
@@ -494,7 +564,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _spotifyBusy.value = true
             _spotifyError.value = null
 
-            val exchange = spotifyAuthManager.exchangeCode(code, pending.verifier)
+            val exchange = spotifyAuthManager.exchangeCode(code, pending.verifier, pending.redirectUri)
             if (exchange.isFailure) {
                 _spotifyError.value = "Échange du jeton Spotify échoué : ${exchange.exceptionOrNull()?.message}"
                 _spotifyBusy.value = false
@@ -897,6 +967,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     override fun onCleared() {
+        pendingSpotifyAuth?.server?.close()
         player.release()
         super.onCleared()
     }

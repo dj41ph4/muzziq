@@ -24,6 +24,7 @@ next-env.d.ts
 /android-mobile/local.properties
 /android-mobile/keystore.properties
 /android-mobile/spotify.properties
+/android-mobile/muzziq-retail-release.jks
 
 # misc
 .DS_Store

@@ -1,9 +1,7 @@
 package com.muzziq.mobile
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -79,15 +77,6 @@ import com.muzziq.mobile.ui.theme.MuzziQTheme
 import com.muzziq.mobile.playback.CastController
 import kotlinx.coroutines.delay
 
-/** Schéma/host du deep link de retour Spotify — doit rester identique à
- * SpotifyAuthManager.REDIRECT_URI ("muzziq://spotify-callback") et à
- * l'intent-filter d'AndroidManifest.xml. Dupliqué ici en constantes plutôt que
- * réimporté depuis providers/spotify pour ne pas coupler MainActivity au
- * module Spotify pour une simple comparaison de scheme/host ; les trois
- * emplacements sont commentés les uns vers les autres pour rester synchronisés. */
-private const val SPOTIFY_CALLBACK_SCHEME = "muzziq"
-private const val SPOTIFY_CALLBACK_HOST = "spotify-callback"
-
 class MainActivity : AppCompatActivity() {
     private val vm: AppViewModel by viewModels()
 
@@ -98,12 +87,6 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        // Démarrage à froid via le deep link (rare pour un retour PKCE — Custom Tabs
-        // relance normalement la tâche existante via onNewIntent grâce à singleTop —
-        // mais couvert quand même : un process tué pendant le trajet Custom Tab
-        // relancerait l'Activity depuis zéro avec l'intent de retour comme intent
-        // initial). vm est résolu ici (délégué `by viewModels()`), donc disponible.
-        handleSpotifyCallbackIntent(intent)
         setContent {
             MuzziQTheme {
                 MuzziQApp(
@@ -111,24 +94,6 @@ class MainActivity : AppCompatActivity() {
                     onRequestAudioPermission = { requestAudioPermission.launch(audioPermission()) },
                 )
             }
-        }
-    }
-
-    /** Cas normal : `singleTop` + Custom Tabs relance la tâche existante, Android
-     * appelle onNewIntent() plutôt que de recréer l'Activity. */
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        handleSpotifyCallbackIntent(intent)
-    }
-
-    /** Filtre strictement sur le scheme/host du deep link Spotify (voir constantes en
-     * tête de fichier) — tout autre intent (lancement normal depuis le launcher,
-     * notification média, etc.) est ignoré ici, jamais transmis à handleSpotifyCallback. */
-    private fun handleSpotifyCallbackIntent(intent: Intent) {
-        val data: Uri = intent.data ?: return
-        if (data.scheme == SPOTIFY_CALLBACK_SCHEME && data.host == SPOTIFY_CALLBACK_HOST) {
-            vm.handleSpotifyCallback(data)
         }
     }
 
@@ -481,9 +446,8 @@ private fun MuzziQApp(vm: AppViewModel, onRequestAudioPermission: () -> Unit) {
                         spotifyBusy = spotifyBusy,
                         spotifyError = spotifyError,
                         onConnectSpotify = {
-                            // Onglet sécurisé (jamais une WebView maison) — l'utilisateur voit
-                            // la vraie barre d'adresse accounts.spotify.com. Rien n'est ouvert
-                            // si isConfigured() est faux côté vm (spotifyLoginUri() renvoie null).
+                            // Chrome/Custom Tab sécurisé (jamais une WebView maison) —
+                            // Spotify revient sur le port loopback temporaire de MuzziQ.
                             val uri = vm.spotifyLoginUri()
                             if (uri != null) {
                                 CustomTabsIntent.Builder().build().launchUrl(context, uri)
