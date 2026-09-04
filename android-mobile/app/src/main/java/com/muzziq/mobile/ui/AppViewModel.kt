@@ -68,6 +68,8 @@ sealed interface RootUiState {
  * mapping DTO serveur vers Track vit dans AppViewModel, pas dans l'écran. */
 data class HomeRowUi(val id: String, val title: String, val tracks: List<Track>)
 
+private const val LIKED_PLAYLIST_NAME = "Titres likés"
+
 /** Browse artiste/album (§17, plan) — ne couvre QUE la bibliothèque locale déjà
  * scannée (serveur ou standalone), aucune agrégation inventée. En mode Lié, id/
  * champs viennent de /api/artists /api/albums (voir Models.kt) ; en standalone,
@@ -279,7 +281,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             favorites.setFavorite(track.id, !isFav)
+            syncLikedPlaylist(track, liked = !isFav)
         }
+    }
+
+    /** Le cœur est la source de vérité : la playlist système suit exactement son
+     * état. Créée au premier like, elle ne duplique jamais un même morceau. */
+    private suspend fun syncLikedPlaylist(track: Track, liked: Boolean) {
+        val repo = playlistRepository ?: return
+        val existingPlaylist = repo.playlists().getOrNull()
+            ?.firstOrNull { it.name.equals(LIKED_PLAYLIST_NAME, ignoreCase = true) }
+        val likedPlaylist = existingPlaylist
+            ?: (if (liked) repo.createPlaylist(LIKED_PLAYLIST_NAME).getOrNull() else null)
+        if (likedPlaylist == null) return
+        val result = if (liked) {
+            // Les backends ne garantissent pas tous l'unicité (playlist, piste).
+            // Retirer puis ajouter rend l'opération idempotente.
+            repo.removeTrackFromPlaylist(likedPlaylist.id, track.id)
+            repo.addTrackToPlaylist(likedPlaylist.id, track)
+        } else {
+            repo.removeTrackFromPlaylist(likedPlaylist.id, track.id)
+        }
+        result.onFailure {
+            _error.value = "Le favori est enregistré, mais la playlist $LIKED_PLAYLIST_NAME n'a pas pu être mise à jour : ${it.message}"
+        }
+        refreshPlaylists()
     }
 
     /** Synchronisation bidirectionnelle non destructive : l'union des favoris est
